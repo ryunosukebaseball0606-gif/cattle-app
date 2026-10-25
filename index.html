@@ -157,7 +157,7 @@ const TYPES = {
   ship:    {label:'出荷', f:[{k:'dest', t:'master', m:'dest', label:'出荷先'}]},
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
-  sale:    {label:'販売', f:[{k:'seri', t:'num', label:'セリ番号'}]},
+  sale:    {label:'販売', f:[{k:'seri', t:'num', label:'セリ番号'}, {k:'weight', t:'num', label:'体重(kg)', onlyBreed:'和牛'}, {k:'price', t:'num', label:'価格(円)'}]},
   intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(円)'}]},
 };
 const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','販売済','死亡'];
@@ -549,6 +549,9 @@ function fieldHTML(f){
   if(f.t === 'id') return `<input id="${id}" inputmode="numeric" maxlength="10" placeholder="10桁の数字">`;
   if(f.t === 'num') return `<input id="${id}" type="number" step="0.1" inputmode="decimal" placeholder="例 285">`;
 }
+function fieldsFor(k, a){
+  return TYPES[k].f.filter(f => !f.onlyBreed || (a && f.onlyBreed === a.breed));
+}
 function allowedType(a, k){
   if(a.sex !== '雌' && FEMALE_ONLY.includes(k)) return false;
   if(k === 'wean' && a.birth){
@@ -565,21 +568,21 @@ function renderForm(){
   const T = TYPES[selType];
   $('entryForm').innerHTML = `
     <div class="row"><span class="lbl">日付</span><input type="date" id="evDate" value="${todayS()}"></div>
-    ${T.f.map(f => `<div class="row ${f.twin?'twin hidden':''}"><span class="lbl">${esc(f.label)}</span>${fieldHTML(f)}</div>`).join('')}
+    ${fieldsFor(selType, db.animals[cur]).map(f => `<div class="row ${f.twin?'twin hidden':''}"><span class="lbl">${esc(f.label)}</span>${fieldHTML(f)}</div>`).join('')}
     <button class="btn" data-act="record">記録する</button>`;
   $('entryForm').classList.remove('hidden');
 }
 function recordEvent(){
   if(!cur || !selType) return;
   if(!db.animals[cur] || !allowedType(db.animals[cur], selType)){ toast('この個体には記録できない項目です'); return; }
-  const T = TYPES[selType], data = {};
+  const data = {};
   const twin = $('f_count') && $('f_count').value === '双子';
-  for(const f of T.f){
+  for(const f of fieldsFor(selType, db.animals[cur])){
     if(f.twin && !twin) continue;
     let v = ($('f_'+f.k)?.value || '').trim();
     if(!v){ toast(f.label + 'を選択・入力してください'); return; }
     if(f.t === 'id' && !ID_RE.test(v)){ toast(f.label + 'は10桁の数字で入力してください'); return; }
-    if(f.t === 'num'){ v = Number(v); if(!(v > 0)){ toast('体重を正しく入力してください'); return; } }
+    if(f.t === 'num'){ v = Number(v); if(!(v > 0)){ toast(f.label + 'を正しく入力してください'); return; } }
     data[f.k] = v;
   }
   if(selType === 'calving'){
