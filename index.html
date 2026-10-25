@@ -87,6 +87,7 @@
   <button data-act="allList" data-arg="list">個体一覧</button>
   <button data-act="breedTab" data-arg="和牛" data-breed="和牛" style="font-size:13px">和牛</button>
   <button data-act="breedTab" data-arg="ホルスタイン" data-breed="ホルスタイン" style="font-size:12px">ホルスタイン</button>
+  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" style="font-size:12px">哺乳中</button>
   <button data-act="newReg" data-arg="reg">登録</button>
   <button data-act="show" data-arg="set">設定</button>
 </nav>
@@ -771,7 +772,7 @@ function delAnimal(tag){
 const BREED_COLOR = {'和牛':'#111827','ホルスタイン':'#ea580c','F1':'#9ca3af','その他':'#ffffff'};
 function renderList(){
   const q = $('search').value.trim();
-  $('breedChips').innerHTML = breedChipsHTML(true);
+  $('breedChips').innerHTML = breedChipsHTML();
   $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
   const outFilter = ['出荷済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
