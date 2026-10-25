@@ -783,18 +783,20 @@ function renderSettings(){
       <button class="btn sub" data-act="syncNow">今すぐ同期</button>
       <div id="syncStatus" class="muted" style="margin-top:8px">${esc(syncMsg || (syncURL() ? '' : '未接続（この端末だけに保存されています）'))}</div>
     </div>
-    <div class="card"><h3>種牛の系統（血統）</h3>
-      <div class="muted" style="margin-bottom:8px">種牛ごとに系統（田尻・藤良・気高）を登録します。ここで決めると、その種牛を父とする子牛の血統が自動で決まります。変更すると、関連する個体すべてに即時反映されます。</div>
+    <details class="card">
+      <summary style="font-weight:bold;font-size:17px;padding:4px 0">種牛の系統（血統）（タップで開く）</summary>
+      <div class="muted" style="margin:8px 0">種牛ごとに系統（田尻・藤良・気高）を登録します。ここで決めると、その種牛を父とする子牛の血統が自動で決まります。変更すると、関連する個体すべてに即時反映されます。</div>
       ${sireRows}
-    </div>
-    <div class="card"><h3>繁殖・出荷の目安</h3>
+    </details>
+    <details class="card">
+      <summary style="font-weight:bold;font-size:17px;padding:4px 0">繁殖・出荷の目安（タップで開く）</summary>
       ${rowsFor('gest','妊娠期間（日）')}
       ${rowsFor('weanM','離乳月齢（ヶ月）')}
       ${rowsFor('shipM','出荷目安（ヶ月齢）')}
       ${rowsFor('reproM','発情・授精ができる月齢（ヶ月）')}
       <div class="row" style="margin-top:8px"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
       <button class="btn" data-act="saveSettings">保存</button>
-    </div>
+    </details>
     <details class="card">
       <summary style="font-weight:bold;font-size:17px;padding:4px 0">選択肢の管理（タップで開く）</summary>
       <div style="margin-top:8px">${masters}</div>
