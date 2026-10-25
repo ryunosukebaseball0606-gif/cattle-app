@@ -790,7 +790,7 @@ function renderList(){
       ${isF && hasRepro(t) ? stageBar(t) : ''}
       <div>${st}</div></div>`;
   };
-  const section = (title, arr) => `<div class="muted" style="margin:12px 0 6px;font-weight:bold">${title}（${arr.length}頭）</div>` + (arr.length ? arr.map(listItem).join('') : '<div class="muted">なし</div>');
+  const section = (title, arr, id) => `<div ${id ? `id="${id}"` : ''} class="muted" style="margin:12px 0 6px;font-weight:bold;scroll-margin-top:12px">${title}（${arr.length}頭）</div>` + (arr.length ? arr.map(listItem).join('') : '<div class="muted">なし</div>');
   const isBreeder = t => { const a = db.animals[t]; return a.breed === '和牛' && a.sex === '雌' && !!last(t,'retain'); };
   let rows, head = '';
   if(breedF === '和牛' || breedF === 'ホルスタイン'){
@@ -798,10 +798,10 @@ function renderList(){
     const br = tags.filter(isBr), other = tags.filter(t => !isBr(t));
     const idxOf = t => stageOf(t).idx;
     const n0 = br.filter(t => idxOf(t) <= 1), n2 = br.filter(t => idxOf(t) === 2), n3 = br.filter(t => idxOf(t) === 3);
-    const tile = (label, n, cls) => `<div class="tile ${cls}"><div style="font-size:26px;font-weight:bold">${n}</div><div style="font-size:13px">${label}</div></div>`;
-    head = `<div class="tiles">${tile('未受胎', n0.length, 't-warn')}${tile('鑑定待ち', n2.length, 't-info')}${tile('妊娠中', n3.length, 't-calm')}</div>`;
-    rows = section('未受胎（受胎を最優先）', n0) + section('授精済・鑑定待ち', n2) + section('妊娠中', n3) +
-      section(breedF === '和牛' ? 'その他の和牛' : 'その他のホルスタイン', other);
+    const tile = (label, n, cls, jump) => `<div class="tile ${cls}" data-jump="${jump}" style="cursor:pointer"><div style="font-size:26px;font-weight:bold">${n}</div><div style="font-size:13px">${label}</div></div>`;
+    head = `<div class="tiles">${tile('未受胎', n0.length, 't-warn', 'sec-n0')}${tile('鑑定待ち', n2.length, 't-info', 'sec-n2')}${tile('妊娠中', n3.length, 't-calm', 'sec-n3')}</div>`;
+    rows = section('未受胎（受胎を最優先）', n0, 'sec-n0') + section('授精済・鑑定待ち', n2, 'sec-n2') + section('妊娠中', n3, 'sec-n3') +
+      section(breedF === '和牛' ? 'その他の和牛' : 'その他のホルスタイン', other, 'sec-other');
   } else {
     rows = tags.length ? tags.map(listItem).join('') : '<div class="muted">該当する個体がありません</div>';
   }
@@ -1176,6 +1176,8 @@ document.addEventListener('click', e => {
     ACT[b.dataset.act]?.(b.dataset.arg);
     return;
   }
+  const jump = e.target.closest('[data-jump]');
+  if(jump){ document.getElementById(jump.dataset.jump)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
   const t = e.target.closest('[data-tag]');
   if(t){ show('input'); openTag(t.dataset.tag); }
 });
