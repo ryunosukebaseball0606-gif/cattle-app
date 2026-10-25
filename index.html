@@ -87,12 +87,13 @@
 </section>
 
 <section id="v-alerts" class="hidden">
-  <div class="card"><h3>対応が必要な項目（期限が近い順）</h3><div id="alertBox"></div></div>
+  <div class="card"><h3>対応が必要な項目（期限が近い順）</h3><div class="chips" id="breedChipsA"></div><div id="alertBox"></div></div>
 </section>
 
 <section id="v-list" class="hidden">
   <div class="card">
     <input id="search" placeholder="簡易番号（4桁）または識別番号で検索" oninput="renderList()" style="margin-bottom:10px">
+    <div class="chips" id="breedChips"></div>
     <div class="chips" id="chips"></div>
     <div id="listBox"></div>
   </div>
@@ -191,7 +192,9 @@ let db = load();
 function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty','1'); updateBadge(); scheduleSync(); }
 
 /* ---------- 共通 ---------- */
-let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false;
+let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
+function breedChipsHTML(){ return ['全て','和牛','ホルスタイン','F1','その他'].map(b => `<button class="chip ${breedF===b?'on':''}" data-act="breedf" data-arg="${b}">${b}</button>`).join(''); }
+function setBreed(b){ breedF = b; renderList(); renderAlerts(); }
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -631,10 +634,12 @@ function delAnimal(tag){
 const BREED_COLOR = {'和牛':'#111827','ホルスタイン':'#ea580c','F1':'#9ca3af','その他':'#ffffff'};
 function renderList(){
   const q = $('search').value.trim();
+  $('breedChips').innerHTML = breedChipsHTML();
   $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
   const outFilter = ['出荷済','販売済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
     .filter(t => (showOut || outFilter || !isOut(t)))
+    .filter(t => breedF === '全て' || db.animals[t].breed === breedF)
     .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
     .sort(natSort);
   const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '販売・出荷・死亡の牛も表示'}</button>`;
@@ -655,7 +660,8 @@ function renderList(){
   }).join('') : '<div class="muted">該当する個体がありません</div>');
 }
 function renderAlerts(){
-  const list = alerts();
+  $('breedChipsA').innerHTML = breedChipsHTML();
+  const list = alerts().filter(x => breedF === '全て' || (db.animals[x.tag] || {}).breed === breedF);
   $('alertBox').innerHTML = list.length ? list.map(x => `
     <div class="item" data-tag="${esc(x.tag)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
@@ -919,6 +925,7 @@ const ACT = {
   },
   syncNow: () => pullSync(),
   toggleOut: () => { showOut = !showOut; renderList(); },
+  breedf: b => setBreed(b),
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
   confirmMaster: m => {
