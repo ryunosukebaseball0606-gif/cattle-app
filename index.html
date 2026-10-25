@@ -153,7 +153,7 @@ const TYPES = {
   ship:    {label:'出荷', f:[{k:'dest', t:'master', m:'dest', label:'出荷先'}]},
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
-  intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(円)'}, {k:'age', t:'num', label:'導入時の月齢'}]},
+  intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(円)'}]},
 };
 const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','死亡'];
 const ID_RE = /^\d{10}$/;
@@ -499,10 +499,17 @@ function renderHistory(){
       <button class="btn sub btnsmall" data-act="delEv" data-arg="${e.id}" data-confirm>削除</button></div>`;
   }).join('') : '<div class="muted">まだ記録がありません</div>';
 }
+function monthsBetween(a, b){
+  const A = new Date(a + 'T00:00:00Z'), B = new Date(b + 'T00:00:00Z');
+  let m = (B.getUTCFullYear() - A.getUTCFullYear()) * 12 + (B.getUTCMonth() - A.getUTCMonth());
+  if(B.getUTCDate() < A.getUTCDate()) m--;
+  return m;
+}
 function evSummary(e){
   const d = e.data || {};
   if(e.type === 'intro'){
-    return [d.src, d.price ? `買取 ${Number(d.price).toLocaleString()}円` : '', d.age ? `導入時 ${d.age}ヶ月` : ''].filter(Boolean).join(' ／ ');
+    const an = db.animals[e.tag], am = (an && an.birth) ? monthsBetween(an.birth, e.date) : null;
+    return [d.src, d.price ? `買取 ${Number(d.price).toLocaleString()}円` : '', am !== null ? `導入時 ${am}ヶ月` : '生年月日未登録'].filter(Boolean).join(' ／ ');
   }
   if(e.type === 'calving' && d.calves){
     return [d.assist, d.count, ...d.calves.map(c => `${c.id} ${c.sex} ${c.breed}`)].filter(Boolean).join(' ／ ');
