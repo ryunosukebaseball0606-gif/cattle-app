@@ -150,7 +150,7 @@ const TYPES = {
   move:    {label:'移動', f:[{k:'barn', t:'master', m:'barn', label:'移動先'}]},
   weight:  {label:'体重', f:[{k:'kg', t:'num', label:'体重(kg)'}]},
   wean:    {label:'離乳', f:[]},
-  sick:    {label:'診療', f:[{k:'disease', t:'master', m:'disease', label:'病名・症状'}]},
+  sick:    {label:'診療', f:[{k:'disease', t:'multi', m:'disease', label:'病名・症状（複数選べます）'}]},
   vacc:    {label:'ワクチン', f:[{k:'vaccine', t:'master', m:'vaccine', label:'ワクチン'}]},
   inj:     {label:'注射', f:[{k:'drug', t:'master', m:'drug', label:'注射薬'}]},
   et:      {label:'ET', f:[{k:'embryo', t:'master', m:'embryo', label:'胚の種類'}]},
@@ -538,6 +538,10 @@ function fieldHTML(f){
     return f.k === 'sire' ? sel + `<div class="muted" id="sirehint" style="width:100%"></div>` : sel;
   }
   if(f.t === 'fixed') return selHTML(id, [['','選択してください'], ...f.o.map(x => [x,x])], '');
+  if(f.t === 'multi'){
+    const chips = db.masters[f.m].map(x => `<button type="button" class="chip" data-act="toggleMulti" data-arg="${id}|${esc(x)}" data-multi="${id}" data-name="${esc(x)}">${esc(x)}</button>`).join('');
+    return `<input type="hidden" id="${id}" value=""><div class="chips" style="width:100%">${chips || '<span class="muted">選択肢がありません（設定の選択肢の管理で追加）</span>'}</div>`;
+  }
   if(f.t === 'id') return `<input id="${id}" inputmode="numeric" maxlength="10" placeholder="10桁の数字">`;
   if(f.t === 'num') return `<input id="${id}" type="number" step="0.1" inputmode="decimal" placeholder="例 285">`;
 }
@@ -944,6 +948,13 @@ const ACT = {
   syncNow: () => pullSync(),
   toggleOut: () => { showOut = !showOut; renderList(); },
   breedf: b => setBreed(b),
+  toggleMulti: arg => {
+    const i = arg.indexOf('|'), hid = arg.slice(0, i), name = arg.slice(i + 1);
+    const set = new Set(($(hid).value || '').split('、').filter(Boolean));
+    if(set.has(name)) set.delete(name); else set.add(name);
+    $(hid).value = [...set].join('、');
+    document.querySelectorAll(`[data-multi="${hid}"]`).forEach(b => b.classList.toggle('on', set.has(b.dataset.name)));
+  },
   allList: () => { breedF = '全て'; show('list'); },
   breedTab: b => { breedF = b; show('list'); },
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
