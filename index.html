@@ -695,6 +695,11 @@ function renderSettings(){
       <div style="height:8px"></div>
       <button class="btn" data-act="pasteImport">貼り付けた内容で登録</button>
       <div id="pasteMsg" class="muted" style="margin-top:6px"></div>
+      <div class="muted" style="margin:14px 0 6px">受け取ったJSONの文字を貼り付けて読み込む場合（相手が「JSONで保存」した文字）</div>
+      <textarea id="jsonTxt" rows="4" style="width:100%;font-size:13px;padding:10px;border:1px solid #ddd;border-radius:8px;color:#222;background:#fff"></textarea>
+      <div style="height:8px"></div>
+      <button class="btn sub" data-act="importPaste">貼り付けた文字を読み込む</button>
+      <div style="height:12px"></div>
       <input type="file" accept="application/json" onchange="importJSON(this)" style="margin-top:12px">
       <div id="exportBox"></div>
     </div>`;
@@ -730,19 +735,20 @@ function exportAnCSV(){
 function importJSON(input){
   const f = input.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = () => {
-    try{
-      const d = JSON.parse(r.result);
-      Object.assign(db.animals, d.animals || {});
-      Object.assign(db.sireLine, d.sireLine || {});
-      Object.assign(db.sirePed, d.sirePed || {});
-      Object.entries(d.masters || {}).forEach(([m,l]) => { db.masters[m] = [...new Set([...(db.masters[m]||[]), ...l])]; });
-      const ids = new Set(db.events.map(e => e.id));
-      (d.events || []).forEach(e => { if(!ids.has(e.id)) db.events.push(e); });
-      save(); show('set'); toast('読み込みました');
-    }catch(e){ toast('読み込みに失敗しました（JSONが不正です）'); }
-  };
+  r.onload = () => importJSONText(r.result);
   r.readAsText(f);
+}
+function importJSONText(text){
+  try{
+    const d = JSON.parse(text);
+    Object.assign(db.animals, d.animals || {});
+    Object.assign(db.sireLine, d.sireLine || {});
+    Object.assign(db.sirePed, d.sirePed || {});
+    Object.entries(d.masters || {}).forEach(([m,l]) => { db.masters[m] = [...new Set([...(db.masters[m]||[]), ...l])]; });
+    const ids = new Set(db.events.map(e => e.id));
+    (d.events || []).forEach(e => { if(!ids.has(e.id)) db.events.push(e); });
+    save(); show('set'); toast('読み込みました');
+  }catch(e){ toast('読み込みに失敗しました（文字が不正です）'); }
 }
 
 /* ---------- スプレッドシート同期 ---------- */
@@ -889,6 +895,7 @@ const ACT = {
     syncReady = false; toast('接続しました'); pullSync();
   },
   syncNow: () => pullSync(),
+  importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
   confirmMaster: m => {
     const n = ($('nm_'+m).value || '').trim();
