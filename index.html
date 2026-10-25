@@ -795,8 +795,12 @@ async function pushSync(){
   try{
     await fetch(url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({updatedAt: sent, data: stateOnly()})});
-    await new Promise(r => setTimeout(r, 1500));
-    const j = await jsonp(url);
+    let j = {updatedAt: 0};
+    for(let i = 0; i < 6; i++){
+      await new Promise(r => setTimeout(r, 3000));
+      j = await jsonp(url);
+      if((j.updatedAt || 0) >= sent) break;
+    }
     if((j.updatedAt || 0) === sent){
       if(db.updatedAt === sent) lsSet('cattle-dirty','');
       lsSet('cattle-synced','1');
