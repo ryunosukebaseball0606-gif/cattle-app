@@ -292,6 +292,8 @@ function statuses(tag){
       out.push({t:'妊娠中', c:'ok'});
       if(left < 0) out.push({t:'出産予定超過', c:'bad'});
       else if(left <= S.warnDays) out.push({t:'出産直前', c:'warn'});
+    } else if(r.state === '授精済' && r.lastAi){
+      out.push({t:`鑑定待ち（授精から${todayN() - dn(r.lastAi.date)}日）`, c:'info'});
     } else if(r.state){
       out.push({t:r.state, c: (r.state==='空胎'||r.state==='繁殖待ち') ? 'warn' : 'info'});
     }
