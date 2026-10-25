@@ -545,7 +545,7 @@ function openTag(tag){
   const mother = a.mother ? `<span class="lnk" data-tag="${esc(a.mother)}">母 ${esc(a.mother)}</span>` : '';
   $('cowHead').className = 'card ' + (isF ? 'female' : 'male');
   $('cowHead').innerHTML = `
-    <div class="tag" style="font-size:44px;line-height:1">${shortId(tag)} <span class="badge ${isF?'b-bad':'b-info'}" style="font-size:14px">${esc(a.sex)}</span></div>
+    <div class="tag" style="font-size:44px;line-height:1">${shortId(tag)} <span class="badge ${isF?'b-bad':'b-info'}" style="font-size:14px">${esc(a.sex)}</span> <span style="display:inline-block;vertical-align:middle;background:${BREED_COLOR[a.breed]||'#9ca3af'};color:${BREED_COLOR[a.breed]==='#ffffff'?'#111':'#fff'};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:14px">${esc(breedLabel(a))}</span></div>
     ${a.name ? `<div style="font-size:22px;font-weight:bold;margin-top:4px">${esc(a.name)}</div>` : ''}
     <div class="muted">識別番号 ${esc(tag)}</div>
     <div>${st}</div>
