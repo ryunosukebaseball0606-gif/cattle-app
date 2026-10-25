@@ -1,0 +1,866 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>牛管理（個体識別番号基準）</title>
+<style>
+  :root{color-scheme:light;--bg:#f6f5f1;--card:#fff;--ink:#222;--sub:#777;--line:#ddd;--acc:#2f6f4e;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;font-size:17px;background:var(--bg);color:var(--ink)}
+  header{background:var(--acc);color:#fff;padding:12px 16px;font-weight:bold;position:sticky;top:0;z-index:5}
+  nav{display:flex;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:44px;z-index:4}
+  nav button{flex:1;padding:12px 0;border:none;background:none;font-size:15px;color:var(--sub)}
+  nav button.on{color:var(--acc);border-bottom:3px solid var(--acc);font-weight:bold}
+  #alBadge{color:#b33a3a;font-weight:bold}
+  main{padding:12px;max-width:720px;margin:0 auto}
+  .card{background:var(--card);border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .card.female{background:#fdf1f5;border:1px solid #f0c9d6}
+  .card.male{background:#eef4fb;border:1px solid #c5d8ee}
+  .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .row>input,.row>select{flex:1;min-width:0}
+  input,select{color:#222;color-scheme:light;-webkit-text-fill-color:#222;font-size:18px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+  input:disabled,select:disabled{background:#eee}
+  .lbl{width:96px;font-size:15px;color:var(--sub);flex-shrink:0}
+  .tag{font-size:24px;font-weight:bold;letter-spacing:1px}
+  button.btn{font-size:18px;padding:14px;border:none;border-radius:10px;background:var(--acc);color:#fff;width:100%}
+  button.sub{background:#e7ece8;color:var(--ink)}
+  button.danger{background:#b33a3a}
+  .row>button.btn{width:auto;flex-shrink:0;padding:12px 16px;white-space:nowrap}
+  .row>input{height:48px}
+  button.xbtn{width:auto;padding:2px 10px;font-size:16px;line-height:1.4;border:none;border-radius:8px;background:#e7ece8;color:#333;flex-shrink:0}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .grid button{padding:14px 4px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .grid button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .grid button:disabled{background:#ececec;color:#aaa;border-color:#e0e0e0}
+  .muted{color:var(--sub);font-size:14px}
+  .badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:10px;margin:2px 4px 2px 0}
+  .b-ok{background:#dcefe3;color:#1f5a3c}
+  .b-warn{background:#fbeccc;color:#7a4f00}
+  .b-bad{background:#f4dede;color:#9b2c2c}
+  .b-info{background:#dde9f6;color:#2a5b8c}
+  .b-mute{background:#eee;color:#555}
+  .item{padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .item:last-child{border-bottom:none}
+  .ev{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;font-size:15px;gap:8px}
+  .chips{overflow-x:auto;white-space:nowrap;margin-bottom:8px}
+  .chip{display:inline-block;padding:6px 12px;border-radius:16px;border:1px solid var(--line);background:#fff;margin-right:6px;font-size:14px}
+  .chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .lnk{color:var(--acc);text-decoration:underline;cursor:pointer}
+  .hidden{display:none !important}
+  .msg{color:#b33a3a;margin:6px 0}
+  .btnsmall{width:auto;padding:8px 14px;font-size:15px}
+  h3{margin:6px 0 10px;font-size:17px}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:12px 18px;border-radius:10px;font-size:15px;z-index:10;max-width:90%}
+</style>
+<header>牛管理（個体識別番号基準）</header>
+<nav>
+  <button data-act="show" data-arg="input" class="on">入力</button>
+  <button data-act="show" data-arg="alerts">アラート<span id="alBadge"></span></button>
+  <button data-act="show" data-arg="list">個体一覧</button>
+  <button data-act="newReg" data-arg="reg">登録</button>
+  <button data-act="show" data-arg="set">設定</button>
+</nav>
+<main>
+
+<section id="v-input">
+  <div class="card">
+    <div class="row">
+      <input id="tagIn" inputmode="numeric" maxlength="10" placeholder="簡易番号（4桁）または識別番号" onkeydown="if(event.key==='Enter')openTag()">
+      <button class="btn" style="width:auto;padding:12px 18px" onclick="openTag()">開く</button>
+    </div>
+    <div id="tagMsg"></div>
+  </div>
+  <div id="panel" class="hidden">
+    <div class="card" id="cowHead"></div>
+    <div class="card">
+      <h3>イベントを記録</h3>
+      <div class="grid" id="typeGrid"></div>
+      <div id="entryForm" class="hidden" style="margin-top:12px"></div>
+    </div>
+    <div class="card"><h3>血統・系譜</h3><div id="lineage"></div></div>
+    <div class="card"><h3>履歴（新しい順）</h3><div id="history"></div></div>
+  </div>
+</section>
+
+<section id="v-alerts" class="hidden">
+  <div class="card"><h3>対応が必要な項目（期限が近い順）</h3><div id="alertBox"></div></div>
+</section>
+
+<section id="v-list" class="hidden">
+  <div class="card">
+    <input id="search" placeholder="簡易番号（4桁）または識別番号で検索" oninput="renderList()" style="margin-bottom:10px">
+    <div class="chips" id="chips"></div>
+    <div id="listBox"></div>
+  </div>
+</section>
+
+<section id="v-reg" class="hidden">
+  <div class="card" id="regBox"></div>
+</section>
+
+<section id="v-set" class="hidden">
+  <div id="setBox"></div>
+</section>
+
+</main>
+<div id="toast" class="hidden"></div>
+
+<script>
+const KEY = 'cattle-app-v4';
+const DAY = 864e5;
+const BREEDS = ['和牛','ホルスタイン','F1','その他'];
+const SEX = ['雌','雄'];
+const ASSIST = ['自然分娩','介助','難産'];
+const RESULT = ['陽性','陰性','要再検'];
+const MASTER_DEF = {
+  sire:    {label:'種牛', list:[]},
+  barn:    {label:'牛舎・移動先', list:[]},
+  disease: {label:'病名・症状', list:[]},
+  vaccine: {label:'ワクチン', list:[]},
+  drug:    {label:'注射薬', list:[]},
+  embryo:  {label:'胚の種類', list:[]},
+  dest:    {label:'出荷先', list:[]},
+  cause:   {label:'死亡原因', list:[]},
+};
+const LINES = ['田尻','藤良','気高'];
+const LINE_COLOR = {'田尻':'#c0392b','藤良':'#2e8b57','気高':'#2f6fb0'};
+const FEMALE_ONLY = ['estrus','ai','preg','calving','et'];
+const TYPES = {
+  estrus:  {label:'発情', f:[]},
+  ai:      {label:'授精', f:[{k:'sire', t:'master', m:'sire', label:'種牛'}]},
+  preg:    {label:'妊娠鑑定', f:[{k:'result', t:'fixed', o:RESULT, label:'結果'}]},
+  calving: {label:'分娩', f:[
+              {k:'assist', t:'fixed', o:ASSIST, label:'分娩の状態'},
+              {k:'count', t:'fixed', o:['1頭','双子'], label:'生まれた頭数'},
+              {k:'c1id', t:'id', label:'子1の識別番号'},
+              {k:'c1sex', t:'fixed', o:SEX, label:'子1の性別'},
+              {k:'c1breed', t:'fixed', o:BREEDS, label:'子1の品種'},
+              {k:'c2id', t:'id', label:'子2の識別番号', twin:true},
+              {k:'c2sex', t:'fixed', o:SEX, label:'子2の性別', twin:true},
+              {k:'c2breed', t:'fixed', o:BREEDS, label:'子2の品種', twin:true}]},
+  move:    {label:'移動', f:[{k:'barn', t:'master', m:'barn', label:'移動先'}]},
+  weight:  {label:'体重', f:[{k:'kg', t:'num', label:'体重(kg)'}]},
+  wean:    {label:'離乳', f:[]},
+  sick:    {label:'診療', f:[{k:'disease', t:'master', m:'disease', label:'病名・症状'}]},
+  vacc:    {label:'ワクチン', f:[{k:'vaccine', t:'master', m:'vaccine', label:'ワクチン'}]},
+  inj:     {label:'注射', f:[{k:'drug', t:'master', m:'drug', label:'注射薬'}]},
+  et:      {label:'ET', f:[{k:'embryo', t:'master', m:'embryo', label:'胚の種類'}]},
+  ship:    {label:'出荷', f:[{k:'dest', t:'master', m:'dest', label:'出荷先'}]},
+  retain:  {label:'自家保留', f:[]},
+  dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
+};
+const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','死亡'];
+const ID_RE = /^\d{10}$/;
+function shortId(t){ return String(t).slice(5, 9); }  // 1234567890 → 6789
+// 検索：10桁は完全一致、4桁は簡易番号（下4桁）一致、それ以外は部分一致
+function findTags(q){
+  q = (q || '').trim(); if(!q) return [];
+  const all = Object.keys(db.animals);
+  if(ID_RE.test(q)) return all.includes(q) ? [q] : [];
+  if(/^\d{4}$/.test(q)) return all.filter(t => shortId(t) === q).sort(natSort);
+  return all.filter(t => t.includes(q)).sort(natSort);
+}
+
+/* ---------- データ ---------- */
+function load(){
+  let d = {};
+  try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e) {}
+  const masters = {};
+  Object.keys(MASTER_DEF).forEach(m => masters[m] = [...MASTER_DEF[m].list]);
+  Object.keys(d.masters || {}).forEach(m => masters[m] = d.masters[m]);
+  const settings = {
+    gest:   {'和牛':285,'ホルスタイン':280,'F1':283,'その他':283},
+    weanM:  {'和牛':3,'ホルスタイン':2,'F1':2,'その他':2},
+    shipM:  {'和牛':10,'ホルスタイン':10,'F1':10,'その他':10},
+    warnDays: 14,
+    ...(d.settings || {})
+  };
+  return {animals: d.animals || {}, events: d.events || [], masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}};
+}
+let db = load();
+function save(){ localStorage.setItem(KEY, JSON.stringify(db)); updateBadge(); }
+
+/* ---------- 共通 ---------- */
+let cur = null, editing = null, selType = null, filterSt = '全て';
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function natSort(a,b){ return a.localeCompare(b,'en',{numeric:true}); }
+function dn(s){ return Math.round(Date.parse(s + 'T00:00:00Z') / DAY); }
+function n2s(n){ return new Date(n * DAY).toISOString().slice(0,10); }
+function todayS(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function todayN(){ return dn(todayS()); }
+function addDays(s,n){ return n2s(dn(s) + n); }
+function addMonths(s,m){ const d = new Date(s + 'T00:00:00Z'); d.setUTCMonth(d.getUTCMonth() + m); return d.toISOString().slice(0,10); }
+function ageM(birth){
+  if(!birth) return null;
+  const b = new Date(birth + 'T00:00:00Z'), t = new Date(todayS() + 'T00:00:00Z');
+  let m = (t.getUTCFullYear()-b.getUTCFullYear())*12 + (t.getUTCMonth()-b.getUTCMonth());
+  if(t.getUTCDate() < b.getUTCDate()) m--;
+  return m;
+}
+function ageText(birth){ const m = ageM(birth); return m === null ? '月齢不明' : (m < 0 ? '—' : m + 'ヶ月齢'); }
+function byRecent(a,b){ return b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt); }
+function evOf(tag){ return db.events.filter(e => e.tag === tag).sort(byRecent); }
+function evType(tag,type){ return evOf(tag).filter(e => e.type === type); }
+function last(tag,type){ return evType(tag,type)[0]; }
+function children(tag){ return Object.keys(db.animals).filter(t => db.animals[t].mother === tag).sort(natSort); }
+function selHTML(id, opts, val, extra=''){
+  return `<select id="${id}" ${extra}>${opts.map(([v,l]) => `<option value="${esc(v)}"${v===val?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
+}
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 2500);
+}
+function download(name, text, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name; a.click();
+}
+function toCSV(rows){ return '﻿' + rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n'); }
+
+/* ---------- 繁殖・状態 ---------- */
+function hasRepro(tag){ return evOf(tag).some(e => ['estrus','ai','preg','calving','et'].includes(e.type)); }
+function repro(tag){
+  const a = db.animals[tag] || {};
+  const gest = db.settings.gest[a.breed] || 283;
+  const calv = evType(tag,'calving'), ais = evType(tag,'ai'), pregs = evType(tag,'preg');
+  const lc = calv[0], la = ais[0], lp = pregs[0];
+  const r = {count: calv.length, lastCalv: lc, lastAi: la, preg: lp, pregnant: false, due: null, dueApprox: false, state: null, base: null};
+  if(lp && lp.data.result === '陽性' && (!lc || lc.date < lp.date)){
+    r.pregnant = true;
+    const base = ais.find(e => e.date <= lp.date);
+    r.base = base || null;
+    if(base) r.due = addDays(base.date, gest);
+    else { r.due = addDays(lp.date, gest - 60); r.dueApprox = true; }
+  }
+  const sinceCalv = lc ? todayN() - dn(lc.date) : null;
+  if(r.pregnant) r.state = '妊娠中';
+  else if(la && (!lp || la.date > lp.date) && (!lc || la.date > lc.date)) r.state = '授精済';
+  else if(lc && sinceCalv < 60) r.state = '分娩後';
+  else if(lp && lp.data.result === '陰性' && (!lc || lp.date > lc.date)) r.state = '空胎';
+  else if(lc) r.state = '繁殖待ち';
+  return r;
+}
+function statuses(tag){
+  const a = db.animals[tag]; if(!a) return [];
+  const S = db.settings;
+  if(last(tag,'dead')) return [{t:'死亡', c:'bad'}];
+  if(last(tag,'ship')) return [{t:'出荷済', c:'mute'}];
+  if(a.sex === '雌' && hasRepro(tag)){
+    const r = repro(tag), out = [];
+    if(r.count) out.push({t:'産次'+r.count, c:'mute'});
+    if(r.pregnant){
+      const left = dn(r.due) - todayN();
+      out.push({t:'妊娠中', c:'ok'});
+      if(left < 0) out.push({t:'出産予定超過', c:'bad'});
+      else if(left <= S.warnDays) out.push({t:'出産直前', c:'warn'});
+    } else if(r.state){
+      out.push({t:r.state, c: (r.state==='空胎'||r.state==='繁殖待ち') ? 'warn' : 'info'});
+    }
+    return out;
+  }
+  const out = [];
+  const age = ageM(a.birth);
+  if(last(tag,'retain')) out.push({t:'自家保留', c:'info'});
+  if(age !== null){
+    const weanM = S.weanM[a.breed] ?? 2, shipM = S.shipM[a.breed] ?? 10;
+    const sellable = a.sex === '雄' || a.breed === 'ホルスタイン';
+    const wean = last(tag,'wean');
+    if(wean) out.push({t:'離乳済', c:'mute'});
+    else if(age >= weanM) out.push({t:'離乳時期', c:'warn'});
+    else out.push({t:'哺乳中', c:'info'});
+    if(age >= shipM && !last(tag,'retain') && !hasRepro(tag)) out.push({t:'出荷・保留の判定', c:'warn'});
+    else if(wean) out.push({t:'育成中', c:'info'});
+  }
+  return out;
+}
+function alerts(){
+  const S = db.settings, T = todayN(), out = [];
+  for(const tag of Object.keys(db.animals)){
+    const a = db.animals[tag];
+    if(last(tag,'dead') || last(tag,'ship')) continue;
+    const push = (left, text, c) => out.push({tag, left, text, c});
+    if(a.sex === '雌' && hasRepro(tag)){
+      const r = repro(tag);
+      if(r.pregnant){
+        const left = dn(r.due) - T;
+        if(left <= S.warnDays) push(left, left < 0 ? `出産予定超過 ${-left}日（予定日 ${r.due}）` : `出産まで${left}日（予定日 ${r.due}）`, left < 0 ? 'bad' : 'warn');
+      } else if(r.state === '授精済'){
+        const left = dn(r.lastAi.date) + 60 - T;
+        if(left <= 7) push(left, left <= 0 ? '妊娠鑑定の時期です' : `妊娠鑑定まで${left}日`, 'info');
+      } else if(r.state === '分娩後'){
+        const left = dn(r.lastCalv.date) + 60 - T;
+        if(left <= 7) push(left, `授精の検討時期（分娩から60日・あと${left}日）`, 'info');
+      } else if(r.state === '空胎' || r.state === '繁殖待ち'){
+        push(0, `${r.state}：発情・授精の確認`, 'warn');
+      }
+      continue;
+    }
+    const sellable = a.sex === '雄' || a.breed === 'ホルスタイン';
+    if(a.birth && !last(tag,'wean')){
+      const left = dn(addMonths(a.birth, S.weanM[a.breed] ?? 2)) - T;
+      if(left <= S.warnDays && left > -30)
+        push(left, left < 0 ? '離乳未記録（予定超過）' : `離乳まで${left}日`, left < 0 ? 'warn' : 'info');
+    }
+    if(a.birth && !hasRepro(tag) && !last(tag,'retain')){
+      const sm = S.shipM[a.breed] ?? 10;
+      const left = dn(addMonths(a.birth, sm)) - T;
+      if(left <= S.warnDays) push(left, left <= 0 ? `${sm}ヶ月齢：出荷か自家保留かを判定してください` : `出荷・保留の判定まで${left}日`, left <= 0 ? 'warn' : 'info');
+    }
+  }
+  return out.sort((x,y) => x.left - y.left);
+}
+function updateBadge(){ const n = alerts().length; const el = $('alBadge'); if(el) el.textContent = n ? `(${n})` : ''; }
+
+/* ---------- 血統（自動計算） ---------- */
+// 父：授精記録から推定した種牛 → その種牛の系統（種牛の設定で登録）
+function sireOf(tag){
+  const a = db.animals[tag];
+  if(!a || !a.mother || !a.birth) return null;
+  const ais = evType(a.mother,'ai');
+  // 陽性と判定された妊娠鑑定のうち、分娩日に最も近いもの（この妊娠の鑑定）
+  const pos = evType(a.mother,'preg').filter(e => e.data.result === '陽性' && e.date <= a.birth)[0];
+  if(pos){
+    // その鑑定より前の直近の授精が父（直近の種）
+    const b = ais.find(e => e.date <= pos.date);
+    if(b) return b.data.sire;
+  }
+  // 鑑定記録がない場合：分娩日より前で、妊娠期間内の直近の授精
+  const b = ais.find(e => e.date <= a.birth && dn(a.birth) - dn(e.date) <= 330);
+  return b ? b.data.sire : null;
+}
+// 父系統：種牛の系統を優先。父が不明なら、個体に手入力された系統
+function lineOfBull(n){ return n ? (db.sireLine[n] || '') : ''; }
+function lineBadge(l){
+  if(!l) return '<span class="muted">系統未設定</span>';
+  return `<span class="badge" style="background:${LINE_COLOR[l]||'#777'};color:#fff">${esc(l)}</span>`;
+}
+// 個体の父・祖父・曽祖父（オスの血統）。授精記録があればそれを優先
+function malePed(tag, depth=0){
+  // [父, 祖父（母の父）, 曽祖父（母の母の父）]
+  const a = db.animals[tag] || {}, ped = a.ped || {};
+  if(depth > 6) return ['', '', ''];
+  const f = sireOf(tag) || ped.f || '';
+  // 母牛が登録済みなら、母牛の父（祖父）と母牛の祖父（曽祖父）をそのまま使う
+  const dam = a.mother && db.animals[a.mother] ? a.mother : '';
+  const dp = dam ? malePed(dam, depth+1) : ['', '', ''];
+  const ff = dp[0] || ped.ff || '';
+  const fff = dp[1] || ped.fff || '';
+  return [f, ff, fff];
+}
+// 系統：父→祖父→曽祖父の順で、最初に系統が分かっている牛の系統を使う
+function fatherLine(tag){
+  for(const n of malePed(tag)){ const l = lineOfBull(n); if(l) return l; }
+  return '';
+}
+// 母系統：母牛自身の（父系統ベースの）系統
+function motherLine(tag){
+  const m = db.animals[tag]?.mother;
+  if(!m || !db.animals[m]) return '';
+  return fatherLine(m);
+}
+function bloodlineHTML(tag){
+  const ml = db.animals[tag]?.mother ? lineBadge(motherLine(tag)) : '<span class="muted">母：不明</span>';
+  return `<div class="muted">父系統 ${lineBadge(fatherLine(tag))} ／ 母系統 ${ml}</div>`;
+}
+
+/* ---------- 四代血統 ---------- */
+// node: {kind:'cow', id:個体識別番号} | {kind:'bull', id:種牛名} | {kind:'unknown'}
+function parentsOf(node){
+  const U = {kind:'unknown'};
+  if(node.kind === 'cow'){
+    const a = db.animals[node.id] || {};
+    const s = malePed(node.id)[0];
+    const sire = s ? {kind:'bull', id:s} : U;
+    const dam = a.mother && db.animals[a.mother] ? {kind:'cow', id:a.mother} : U;
+    return [sire, dam];
+  }
+  if(node.kind === 'bull'){
+    const p = db.sirePed[node.id] || {};
+    const sire = p.sire ? {kind:'bull', id:p.sire} : U;
+    const dam = p.dam && db.animals[p.dam] ? {kind:'cow', id:p.dam} : U;
+    return [sire, dam];
+  }
+  return [U, U];
+}
+function nodeHTML(n){
+  if(n.kind === 'cow') return `<span class="lnk" data-tag="${esc(n.id)}">${esc(n.id)}</span> ${lineBadge(fatherLine(n.id))}`;
+  return `${esc(n.id)} ${lineBadge(lineOfBull(n.id))}`;
+}
+// 四代（父母〜高祖父母）を世代ごとに集める。不明の先祖は表示しない
+function pedigreeHTML(tag){
+  const gens = [[],[],[],[]];
+  const walk = (node, g, path) => {
+    if(g > 4) return;
+    const [s, d] = parentsOf(node);
+    const sp = path ? path + 'の父' : '父';
+    const dp = path ? path + 'の母' : '母';
+    if(s.kind !== 'unknown'){ gens[g-1].push({label:sp, node:s}); walk(s, g+1, sp); }
+    if(d.kind !== 'unknown'){ gens[g-1].push({label:dp, node:d}); walk(d, g+1, dp); }
+  };
+  walk({kind:'cow', id:tag}, 1, '');
+  const titles = ['第1代（父母）','第2代（祖父母）','第3代（曾祖父母）','第4代（高祖父母）'];
+  return titles.map((t,i) => `<div class="muted" style="margin-top:8px">${t}</div>` +
+    (gens[i].length
+      ? gens[i].map(x => `<div class="ev"><span><span class="muted">${esc(x.label)}</span>　${nodeHTML(x.node)}</span></div>`).join('')
+      : '<div class="muted">記録なし</div>')
+  ).join('');
+}
+
+/* ---------- 表示 ---------- */
+function show(v){
+  ['input','alerts','list','reg','set'].forEach(x => $('v-'+x).classList.toggle('hidden', x !== v));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.arg === v));
+  if(v === 'list') renderList();
+  if(v === 'alerts') renderAlerts();
+  if(v === 'set') renderSettings();
+  updateBadge();
+}
+function openTag(tag){
+  tag = (tag ?? $('tagIn').value).trim();
+  $('tagMsg').innerHTML = '';
+  if(!tag) return;
+  $('tagIn').value = tag;
+  if(!ID_RE.test(tag) && !db.animals[tag]){
+    const found = findTags(tag);
+    cur = null; $('panel').classList.add('hidden');
+    if(found.length === 0){ $('tagMsg').innerHTML = `<div class="msg">簡易番号 ${esc(tag)} に一致する牛はいません</div>`; return; }
+    if(found.length > 1){
+      $('tagMsg').innerHTML = `<div class="muted" style="margin-bottom:6px">簡易番号 ${esc(tag)} は ${found.length} 頭です。選んでください</div>` +
+        found.map(t => { const a = db.animals[t]; return `<div class="item" data-tag="${esc(t)}"><b class="tag" style="font-size:26px">${shortId(t)}</b> <span class="muted">${esc(t)}・${esc(a.sex)}・${esc(a.breed)}</span></div>`; }).join('');
+      return;
+    }
+    tag = found[0]; $('tagIn').value = tag;
+  }
+  if(!db.animals[tag]){
+    cur = null; $('panel').classList.add('hidden');
+    if(!ID_RE.test(tag)){ $('tagMsg').innerHTML = `<div class="msg">個体識別番号は10桁の数字で入力してください</div>`; return; }
+    $('tagMsg').innerHTML = `<div class="msg">個体識別番号 ${esc(tag)} は未登録です</div><button class="btn sub" data-act="regNew" data-arg="${esc(tag)}">この番号で登録する</button>`;
+    return;
+  }
+  cur = tag;
+  const a = db.animals[tag];
+  const isF = a.sex === '雌';
+  const st = statuses(tag).map(s => `<span class="badge b-${s.c}">${esc(s.t)}</span>`).join('');
+  const r = repro(tag);
+  let extra = '';
+  if(r.pregnant){
+    const sl = r.base ? (db.sireLine[r.base.data.sire] || '系統未設定') : '授精記録なし';
+    extra += `<div class="muted">出産予定日：${r.due}${r.dueApprox ? '（概算）' : ''}</div>`;
+    extra += `<div class="muted">予定の父：${r.base ? esc(r.base.data.sire) : '不明'}（${esc(sl)}）</div>`;
+  }
+  const mother = a.mother ? `<span class="lnk" data-tag="${esc(a.mother)}">母 ${esc(a.mother)}</span>` : '母：不明';
+  $('cowHead').className = 'card ' + (isF ? 'female' : 'male');
+  $('cowHead').innerHTML = `
+    <div class="tag" style="font-size:44px;line-height:1">${shortId(tag)} <span class="badge ${isF?'b-bad':'b-info'}" style="font-size:14px">${esc(a.sex)}</span></div>
+    <div class="muted">識別番号 ${esc(tag)}</div>
+    <div>${st}</div>
+    <div class="muted">${esc(a.breed)} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
+    <div class="muted">${mother}</div>
+    ${bloodlineHTML(tag)}
+    ${extra}
+    <div style="margin-top:8px"><button class="btn sub btnsmall" data-act="editAnimal" data-arg="${esc(tag)}">編集</button></div>`;
+  $('panel').classList.remove('hidden');
+  // 雄には雌専用の項目を出さない（押せない表示）
+  $('typeGrid').innerHTML = Object.entries(TYPES).map(([k,t]) => {
+    const blocked = !isF && FEMALE_ONLY.includes(k);
+    return `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}" ${blocked?'disabled':''}>${t.label}</button>`;
+  }).join('');
+  if(!isF && FEMALE_ONLY.includes(selType)){ selType = null; $('entryForm').classList.add('hidden'); }
+  renderLineage(tag);
+  renderHistory();
+}
+function renderLineage(tag){
+  const link = t => `<span class="lnk" data-tag="${esc(t)}">${esc(t)}</span>`;
+  const ups = []; let m = db.animals[tag]?.mother, g = 0;
+  while(m && db.animals[m] && g++ < 4){ ups.push(m); m = db.animals[m].mother; }
+  const up = ups.length ? ups.map(link).join(' ← ') : 'なし';
+  const kids = children(tag);
+  const kidsHtml = kids.length ? kids.map(k => {
+    const n = children(k).length, a = db.animals[k];
+    return `<div class="ev"><span>${link(k)} <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}・父系統 ${lineBadge(fatherLine(k))}${n ? '・子'+n+'頭' : ''}</span></span></div>`;
+  }).join('') : '<div class="muted">子牛の記録なし</div>';
+  $('lineage').innerHTML = `<h3>四代血統</h3>${pedigreeHTML(tag)}<h3 style="margin-top:14px">母系（上流）</h3><div class="muted">${up}</div><h3 style="margin-top:14px">子牛（下流）</h3>${kidsHtml}`;
+}
+function renderHistory(){
+  const ev = evOf(cur).slice(0,50);
+  $('history').innerHTML = ev.length ? ev.map(e => {
+    const sum = evSummary(e);
+    return `<div class="ev"><div><b>${esc(TYPES[e.type]?.label || e.type)}</b> <span class="muted">${esc(e.date)}</span><br><span class="muted">${esc(sum)}</span></div>
+      <button class="btn sub btnsmall" data-act="delEv" data-arg="${e.id}" data-confirm>削除</button></div>`;
+  }).join('') : '<div class="muted">まだ記録がありません</div>';
+}
+function evSummary(e){
+  const d = e.data || {};
+  if(e.type === 'calving' && d.calves){
+    return [d.assist, d.count, ...d.calves.map(c => `${c.id} ${c.sex} ${c.breed}`)].filter(Boolean).join(' ／ ');
+  }
+  return Object.values(d).join(' ／ ');
+}
+function markType(){
+  document.querySelectorAll('#typeGrid button').forEach(b => b.classList.toggle('on', b.dataset.arg === selType));
+}
+function fieldHTML(f){
+  const id = 'f_' + f.k;
+  if(f.t === 'master'){
+    const sel = selHTML(id, [['','選択してください'], ...db.masters[f.m].map(x => [x,x]), ['__add__','＋ 新しく追加']], '', `data-m="${f.m}"`);
+    return f.k === 'sire' ? sel + `<div class="muted" id="sirehint" style="width:100%"></div>` : sel;
+  }
+  if(f.t === 'fixed') return selHTML(id, [['','選択してください'], ...f.o.map(x => [x,x])], '');
+  if(f.t === 'id') return `<input id="${id}" inputmode="numeric" maxlength="10" placeholder="10桁の数字">`;
+  if(f.t === 'num') return `<input id="${id}" type="number" step="0.1" inputmode="decimal" placeholder="例 285">`;
+}
+function renderForm(){
+  const T = TYPES[selType];
+  $('entryForm').innerHTML = `
+    <div class="row"><span class="lbl">日付</span><input type="date" id="evDate" value="${todayS()}"></div>
+    ${T.f.map(f => `<div class="row ${f.twin?'twin hidden':''}"><span class="lbl">${esc(f.label)}</span>${fieldHTML(f)}</div>`).join('')}
+    <button class="btn" data-act="record">記録する</button>`;
+  $('entryForm').classList.remove('hidden');
+}
+function recordEvent(){
+  if(!cur || !selType) return;
+  if(!db.animals[cur] || (db.animals[cur].sex !== '雌' && FEMALE_ONLY.includes(selType))){ toast('この個体（雄）には記録できない項目です'); return; }
+  const T = TYPES[selType], data = {};
+  const twin = $('f_count') && $('f_count').value === '双子';
+  for(const f of T.f){
+    if(f.twin && !twin) continue;
+    let v = ($('f_'+f.k)?.value || '').trim();
+    if(!v){ toast(f.label + 'を選択・入力してください'); return; }
+    if(f.t === 'id' && !ID_RE.test(v)){ toast(f.label + 'は10桁の数字で入力してください'); return; }
+    if(f.t === 'num'){ v = Number(v); if(!(v > 0)){ toast('体重を正しく入力してください'); return; } }
+    data[f.k] = v;
+  }
+  if(selType === 'calving'){
+    const calves = [{id:data.c1id, sex:data.c1sex, breed:data.c1breed}];
+    if(twin) calves.push({id:data.c2id, sex:data.c2sex, breed:data.c2breed});
+    const ids = calves.map(c => c.id);
+    if(ids.includes(cur)){ toast('母と同じ番号は入力できません'); return; }
+    if(new Set(ids).size !== ids.length){ toast('子の番号が重なっています'); return; }
+    data.calves = calves;
+    delete data.c1id; delete data.c1sex; delete data.c1breed; delete data.c2id; delete data.c2sex; delete data.c2breed;
+  }
+  const date = $('evDate').value || todayS();
+  if(date > todayS()){ toast('未来の日付は入力できません'); return; }
+  const now = new Date().toISOString();
+  if(selType === 'calving'){
+    for(const c of data.calves){
+      if(!db.animals[c.id]){
+        db.animals[c.id] = {breed: c.breed, sex: c.sex, birth: date, mother: cur, line: '', createdAt: now};
+      } else {
+        db.animals[c.id].mother = db.animals[c.id].mother || cur;
+        db.animals[c.id].birth = db.animals[c.id].birth || date;
+      }
+    }
+  }
+  db.events.push({id: uid(), tag: cur, type: selType, date, data, createdAt: now});
+  save();
+  openTag(cur); markType(); renderForm();
+  toast('記録しました');
+}
+
+/* ---------- 登録・編集 ---------- */
+function renderReg(tag){
+  editing = tag || null;
+  const a = tag ? db.animals[tag] : {breed:'和牛', sex:'雌', birth:'', mother:''};
+  const ped = a.ped || {};
+  const sireOpts = [['','不明'], ...db.masters.sire.map(x => [x,x])];
+  const mothers = Object.keys(db.animals).filter(t => db.animals[t].sex === '雌' && t !== tag).sort(natSort);
+  $('regBox').innerHTML = `
+    <h3>${tag ? '個体を編集' : '新しい個体を登録'}</h3>
+    <div class="row"><span class="lbl">識別番号</span><input id="rTag" inputmode="numeric" maxlength="10" value="${esc(tag||'')}" ${tag ? 'disabled' : ''} placeholder="10桁の数字"></div>
+    <div class="row"><span class="lbl">性別</span>${selHTML('rSex', SEX.map(x => [x,x]), a.sex)}</div>
+    <div class="row"><span class="lbl">品種</span>${selHTML('rBreed', BREEDS.map(x => [x,x]), a.breed)}</div>
+    <div class="row"><span class="lbl">生年月日</span><input type="date" id="rBirth" max="${todayS()}" value="${esc(a.birth||'')}"></div>
+    <div class="row"><span class="lbl">母</span>${selHTML('rMother', [['','不明'], ...mothers.map(x => [x,x])], a.mother||'')}</div>
+    <div class="muted" style="margin:6px 0">血統（オスの3代）。登録牛から生まれた子牛は自動で入るので、ここは外から入れた牛だけ入力します。</div>
+    <div class="row"><span class="lbl">父（精液）</span>${selHTML('rPf', sireOpts, ped.f||'')}</div>
+    <div class="row"><span class="lbl">祖父（母の父）</span>${selHTML('rPff', sireOpts, ped.ff||'')}</div>
+    <div class="row"><span class="lbl">曽祖父（母の母の父）</span>${selHTML('rPfff', sireOpts, ped.fff||'')}</div>
+    <button class="btn" data-act="saveAnimal">${tag ? '保存' : '登録する'}</button>
+    ${tag ? `<div style="height:8px"></div><button class="btn danger" data-act="delAnimal" data-arg="${esc(tag)}" data-confirm>この個体を削除</button>` : ''}
+    <div id="regMsg" class="msg"></div>`;
+}
+function saveAnimal(){
+  const tag = editing || $('rTag').value.trim();
+  if(!ID_RE.test(tag)){ $('regMsg').textContent = '識別番号は10桁の数字で入力してください'; return; }
+  if(!editing && db.animals[tag]){ $('regMsg').textContent = 'この番号はすでに登録されています'; return; }
+  const sex = $('rSex').value, birth = $('rBirth').value;
+  if(birth && birth > todayS()){ $('regMsg').textContent = '生年月日に未来の日付は入れられません'; return; }
+  if(sex === '雄' && hasRepro(tag)){ $('regMsg').textContent = '繁殖の記録がある個体は、雄に変更できません'; return; }
+  const prev = db.animals[tag] || {createdAt: new Date().toISOString()};
+  db.animals[tag] = {...prev, sex, breed: $('rBreed').value, birth, mother: $('rMother').value, ped: {f: $('rPf').value, ff: $('rPff').value, fff: $('rPfff').value}};
+  save(); editing = null;
+  show('input'); openTag(tag);
+  toast('保存しました');
+}
+function delAnimal(tag){
+  delete db.animals[tag];
+  db.events = db.events.filter(e => e.tag !== tag);
+  Object.values(db.animals).forEach(a => { if(a.mother === tag) a.mother = ''; });
+  save(); cur = null; $('tagIn').value = '';
+  $('panel').classList.add('hidden'); $('tagMsg').innerHTML = '';
+  show('input');
+  toast('削除しました');
+}
+
+/* ---------- 一覧・アラート ---------- */
+function renderList(){
+  const q = $('search').value.trim();
+  $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
+  const tags = Object.keys(db.animals)
+    .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
+    .sort(natSort);
+  $('listBox').innerHTML = tags.length ? tags.map(t => {
+    const a = db.animals[t], r = repro(t);
+    const st = statuses(t).map(s => `<span class="badge b-${s.c}">${esc(s.t)}</span>`).join('');
+    const due = r.pregnant ? ` ／ 出産予定 ${r.due}` : '';
+    const isF = a.sex === '雌';
+    return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};margin:0 -14px;padding:12px 14px">
+      <b class="tag" style="font-size:30px">${shortId(t)}</b> <span class="muted">${esc(t)}</span>
+      <div class="muted" style="font-size:13px;letter-spacing:.5px">${malePed(t).map(n => esc(n || '不明')).join(' - ')}</div>
+      <span class="muted">${esc(a.sex)}・${esc(a.breed)}・${esc(ageText(a.birth))}${due}</span>
+      <div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>
+      <div>${st}</div></div>`;
+  }).join('') : '<div class="muted">該当する個体がありません</div>';
+}
+function renderAlerts(){
+  const list = alerts();
+  $('alertBox').innerHTML = list.length ? list.map(x => `
+    <div class="item" data-tag="${esc(x.tag)}">
+      <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
+      <div><span class="badge b-${x.c}">${esc(x.text)}</span></div>
+    </div>`).join('') : '<div class="muted">今、対応が必要な項目はありません</div>';
+}
+
+/* ---------- 設定 ---------- */
+function renderSettings(){
+  const S = db.settings;
+  const rowsFor = (key, label) => `<div class="muted" style="margin-top:8px">${label}</div>` +
+    BREEDS.map(b => `<div class="row"><span class="lbl">${b}</span><input type="number" min="0" step="1" data-set="${key}" data-b="${b}" value="${S[key][b] ?? ''}"></div>`).join('');
+  const sireRows = db.masters.sire.length ? db.masters.sire.map(s => {
+    const id = uidSafe(s), p = db.sirePed[s] || {};
+    return `<div class="card" style="padding:10px">
+      <b>${esc(s)}</b>
+      <div class="row" style="margin-top:6px"><span class="lbl">系統</span>${selHTML('sl_'+id, [['','未設定'], ...LINES.map(x => [x,x])], db.sireLine[s]||'', `data-sireline="${esc(s)}"`)}</div>
+    </div>`;
+  }).join('') : '<div class="muted">種牛が未登録です（下の「種牛」で追加してください）</div>';
+  const masters = Object.keys(MASTER_DEF).map(m => `
+    <div class="card"><b>${MASTER_DEF[m].label}</b>
+      ${db.masters[m].map((x,i) => `<div class="ev"><span>${esc(x)}</span>
+        <button class="xbtn" data-act="delMaster" data-arg="${m}|${i}" data-confirm>×</button></div>`).join('') || '<div class="muted">未登録</div>'}
+      <div style="height:8px"></div>
+      <button class="btn sub" data-act="openAddMaster" data-arg="${m}">＋ 追加</button>
+      <div class="row hidden" id="addm_${m}" style="margin-top:8px">
+        <input id="nm_${m}" placeholder="新しい名称を入力">
+        <button class="btn btnsmall" data-act="confirmMaster" data-arg="${m}">追加</button>
+      </div>
+    </div>`).join('');
+  $('setBox').innerHTML = `
+    <div class="card"><h3>種牛の系統（血統）</h3>
+      <div class="muted" style="margin-bottom:8px">種牛ごとに系統（田尻・藤良・気高）を登録します。ここで決めると、その種牛を父とする子牛の血統が自動で決まります。変更すると、関連する個体すべてに即時反映されます。</div>
+      ${sireRows}
+    </div>
+    <div class="card"><h3>繁殖・出荷の目安</h3>
+      ${rowsFor('gest','妊娠期間（日）')}
+      ${rowsFor('weanM','離乳月齢（ヶ月）')}
+      ${rowsFor('shipM','出荷目安（ヶ月齢）')}
+      <div class="row" style="margin-top:8px"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
+      <button class="btn" data-act="saveSettings">保存</button>
+    </div>
+    <h3>選択肢の管理</h3>
+    ${masters}
+    <div class="card"><h3>データ</h3>
+      <button class="btn" data-act="json">JSONで保存（バックアップ）</button><div style="height:8px"></div>
+      <button class="btn sub" data-act="csvEv">イベントをCSVで保存</button><div style="height:8px"></div>
+      <button class="btn sub" data-act="csvAn">個体一覧をCSVで保存</button><div style="height:12px"></div>
+      <div class="muted" style="margin:12px 0 6px">まとめて登録：1頭1行で「識別番号 生年月日 性別 品種」（例：1234567890 10.1 雄 和牛）。生年月日は「10.1」か「2026-10-01」の形で入れます。</div>
+      <textarea id="pasteTxt" rows="5" style="width:100%;font-size:16px;padding:10px;border:1px solid #ddd;border-radius:8px;color:#222;background:#fff"></textarea>
+      <div style="height:8px"></div>
+      <button class="btn" data-act="pasteImport">貼り付けた内容で登録</button>
+      <div id="pasteMsg" class="muted" style="margin-top:6px"></div>
+      <input type="file" accept="application/json" onchange="importJSON(this)" style="margin-top:12px">
+      <div id="exportBox"></div>
+    </div>`;
+}
+function uidSafe(s){ let h = 0; for(const c of s) h = (h*31 + c.charCodeAt(0)) >>> 0; return 'x' + h; }
+function saveSettings(){
+  document.querySelectorAll('[data-set]').forEach(el => { db.settings[el.dataset.set][el.dataset.b] = Number(el.value) || 0; });
+  db.settings.warnDays = Number($('warnDays').value) || 14;
+  save(); toast('保存しました');
+}
+
+/* ---------- 書出・読込 ---------- */
+function showExport(text){
+  $('exportBox').innerHTML = `<div class="muted" style="margin:8px 0">下の文字を全部コピーして、メモアプリなどに貼って保存してください。</div>
+    <textarea id="exTxt" readonly rows="6" style="font-size:13px;width:100%">${esc(text)}</textarea>
+    <button class="btn sub" style="margin-top:8px" data-act="copyEx">コピーする</button>`;
+}
+function exportJSON(){ showExport(JSON.stringify(db)); }
+function exportEvCSV(){
+  const rows = [['日付','個体識別番号','種類','内容']];
+  db.events.slice().sort((a,b) => a.date.localeCompare(b.date))
+    .forEach(e => rows.push([e.date, e.tag, TYPES[e.type]?.label || e.type, evSummary(e)]));
+  showExport(toCSV(rows));
+}
+function exportAnCSV(){
+  const rows = [['個体識別番号','性別','品種','生年月日','母','父系統','母系統','現在の状態']];
+  Object.keys(db.animals).sort(natSort).forEach(t => {
+    const a = db.animals[t];
+    rows.push([t, a.sex, a.breed, a.birth || '', a.mother || '', fatherLine(t), motherLine(t), statuses(t).map(s => s.t).join(' / ')]);
+  });
+  showExport(toCSV(rows));
+}
+function importJSON(input){
+  const f = input.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      Object.assign(db.animals, d.animals || {});
+      Object.assign(db.sireLine, d.sireLine || {});
+      Object.assign(db.sirePed, d.sirePed || {});
+      Object.entries(d.masters || {}).forEach(([m,l]) => { db.masters[m] = [...new Set([...(db.masters[m]||[]), ...l])]; });
+      const ids = new Set(db.events.map(e => e.id));
+      (d.events || []).forEach(e => { if(!ids.has(e.id)) db.events.push(e); });
+      save(); show('set'); toast('読み込みました');
+    }catch(e){ toast('読み込みに失敗しました（JSONが不正です）'); }
+  };
+  r.readAsText(f);
+}
+
+/* ---------- 操作の受付 ---------- */
+const ACT = {
+  show: v => show(v),
+  newReg: () => { renderReg(null); show('reg'); },
+  regNew: t => { renderReg(null); $('rTag').value = t; show('reg'); },
+  editAnimal: t => { renderReg(t); show('reg'); },
+  saveAnimal: () => saveAnimal(),
+  delAnimal: t => delAnimal(t),
+  pick: k => { selType = k; renderForm(); markType(); },
+  record: () => recordEvent(),
+  delEv: id => { db.events = db.events.filter(e => e.id !== id); save(); openTag(cur); toast('削除しました'); },
+  filter: f => { filterSt = f; renderList(); },
+  saveSettings: () => saveSettings(),
+  openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
+  confirmMaster: m => {
+    const n = ($('nm_'+m).value || '').trim();
+    if(!n){ toast('名称を入力してください'); return; }
+    if(!db.masters[m].includes(n)){ db.masters[m].push(n); save(); }
+    renderSettings(); toast(`「${n}」を追加しました`);
+  },
+  confirmAdd: arg => {
+    const [m, id] = arg.split('|');
+    const sel = $(id), n = ($('nm_'+id).value || '').trim();
+    if(!n){ toast('名称を入力してください'); return; }
+    if(!db.masters[m].includes(n)){ db.masters[m].push(n); save(); }
+    if(![...sel.options].some(o => o.value === n)) sel.insertBefore(new Option(n,n), sel.querySelector('option[value="__add__"]'));
+    sel.value = n;
+    const row = sel.closest('.row').nextElementSibling;
+    if(row && row.classList.contains('addrow')) row.remove();
+    if(id === 'f_sire') $('sirehint').textContent = db.sireLine[n] ? `系統：${db.sireLine[n]}` : '系統未設定（設定画面で登録）';
+    toast(`「${n}」を追加して選択しました`);
+  },
+  delMaster: arg => {
+    const [m,i] = arg.split('|');
+    const removed = db.masters[m][Number(i)];
+    db.masters[m].splice(Number(i),1);
+    if(m === 'sire') delete db.sireLine[removed];
+    save(); renderSettings(); toast('削除しました');
+  },
+  json: () => exportJSON(),
+  csvEv: () => exportEvCSV(),
+  csvAn: () => exportAnCSV(),
+  pasteImport: () => {
+    const lines = ($('pasteTxt').value || '').split(/\n/).map(s => s.trim()).filter(Boolean);
+    let ok = 0; const skip = [], bad = [];
+    for(const ln of lines){
+      const [id, b, sex, breed] = ln.split(/[\s,、]+/);
+      let birth = b || '';
+      if(/^\d{1,2}\.\d{1,2}$/.test(birth)){
+        const [mm, dd] = birth.split('.');
+        birth = `${todayS().slice(0,4)}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+      }
+      if(!ID_RE.test(id || '') || !/^\d{4}-\d{2}-\d{2}$/.test(birth) || birth > todayS() || !SEX.includes(sex) || !BREEDS.includes(breed)){
+        bad.push(ln); continue;
+      }
+      if(db.animals[id]){ skip.push(id); continue; }
+      db.animals[id] = {breed, sex, birth, mother: '', ped: {}, createdAt: new Date().toISOString()};
+      ok++;
+    }
+    save();
+    let msg = `${ok}頭を登録しました`;
+    if(skip.length) msg += `。登録済みのため飛ばした：${skip.join('、')}`;
+    if(bad.length) msg += `。読めなかった行：${bad.join(' ／ ')}`;
+    $('pasteMsg').textContent = msg;
+    if(ok) $('pasteTxt').value = '';
+  },
+  copyEx: () => {
+    const t = $('exTxt'); t.focus(); t.select();
+    try { navigator.clipboard.writeText(t.value).then(() => toast('コピーしました'), () => toast('選択した文字をコピーしてください')); }
+    catch(e) { toast('選択した文字をコピーしてください'); }
+  },
+};
+
+// 「もう一度押すと確定」方式（ダイアログを使わない）
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if(b){
+    if(b.hasAttribute('data-confirm') && !b.dataset.armed){
+      b.dataset.armed = '1';
+      b.dataset.orig = b.textContent;
+      b.textContent = b.classList.contains('xbtn') ? '確定' : 'もう一度押すと削除';
+      b.style.background = '#b33a3a'; b.style.color = '#fff';
+      setTimeout(() => {
+        if(b.isConnected && b.dataset.armed){
+          delete b.dataset.armed; b.textContent = b.dataset.orig; b.style.background = ''; b.style.color = '';
+        }
+      }, 3000);
+      return;
+    }
+    ACT[b.dataset.act]?.(b.dataset.arg);
+    return;
+  }
+  const t = e.target.closest('[data-tag]');
+  if(t){ show('input'); openTag(t.dataset.tag); }
+});
+
+document.addEventListener('change', e => {
+  const s = e.target;
+  if(s.tagName !== 'SELECT') return;
+  // 種牛の系統の設定
+  if(s.dataset.sireline !== undefined){
+    db.sireLine[s.dataset.sireline] = s.value;
+    save(); toast('系統を保存しました。関連する血統も自動で更新されます');
+    return;
+  }
+  const row = s.closest('.row');
+  const next = row && row.nextElementSibling;
+  if(next && next.classList.contains('addrow')) next.remove();
+  if(s.dataset.sp){
+    const name = s.dataset.name;
+    db.sirePed[name] = db.sirePed[name] || {};
+    db.sirePed[name][s.dataset.sp] = s.value;
+    save(); toast('血統を保存しました');
+    return;
+  }
+  if(s.id === 'f_count'){
+    document.querySelectorAll('.twin').forEach(r => r.classList.toggle('hidden', s.value !== '双子'));
+  }
+  // 授精の種牛を選んだら、その系統を表示
+  if(s.id === 'f_sire'){
+    const h = $('sirehint');
+    if(h) h.textContent = s.value && s.value !== '__add__' ? (db.sireLine[s.value] ? `系統：${db.sireLine[s.value]}` : '系統未設定（設定画面で登録）') : '';
+  }
+  if(s.value !== '__add__') return;
+  const m = s.dataset.m;
+  const addRow = document.createElement('div');
+  addRow.className = 'row addrow';
+  addRow.innerHTML = `<input id="nm_${s.id}" placeholder="新しい名称を入力">
+    <button class="btn btnsmall" data-act="confirmAdd" data-arg="${m}|${s.id}">追加</button>`;
+  row.insertAdjacentElement('afterend', addRow);
+  $('nm_'+s.id).focus();
+});
+
+renderReg(null);
+show('input');
+</script>
+
+</body></html>
