@@ -41,6 +41,18 @@
   .b-bad{background:#f4dede;color:#9b2c2c}
   .b-info{background:#dde9f6;color:#2a5b8c}
   .b-mute{background:#eee;color:#555}
+  .b-calm{background:#e6f4ec;color:#2f6b4f}
+  .stg{display:flex;gap:3px;margin:6px 0}
+  .sg{flex:1;text-align:center;font-size:12px;padding:4px 0;border-radius:6px;background:#eee;color:#777}
+  .sg.done{background:#dcefe3;color:#1f5a3c}
+  .sg.warn{background:#fbeccc;color:#7a4f00;font-weight:bold}
+  .sg.cur{background:#2a5b8c;color:#fff;font-weight:bold}
+  .sg.calm{background:#6fae8c;color:#fff;font-weight:bold}
+  .tiles{display:flex;gap:8px;margin-bottom:12px}
+  .tile{flex:1;border-radius:10px;padding:8px 4px;text-align:center}
+  .t-warn{background:#fbeccc;color:#7a4f00}
+  .t-info{background:#dde9f6;color:#2a5b8c}
+  .t-calm{background:#e6f4ec;color:#2f6b4f}
   .item{padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
   .item:last-child{border-bottom:none}
   .ev{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;font-size:15px;gap:8px}
@@ -289,7 +301,7 @@ function statuses(tag){
     if(r.count) out.push({t:'産次'+r.count, c:'mute'});
     if(r.pregnant){
       const left = dn(r.due) - todayN();
-      out.push({t:'妊娠中', c:'ok'});
+      out.push({t:'妊娠中', c:'calm'});
       if(left < 0) out.push({t:'出産予定超過', c:'bad'});
       else if(left <= S.warnDays) out.push({t:'出産直前', c:'warn'});
     } else if(r.state === '授精済' && r.lastAi){
@@ -312,6 +324,19 @@ function statuses(tag){
     else if(wean) out.push({t:'育成中', c:'info'});
   }
   return out;
+}
+// 繁殖の進み具合：0 未受胎（発情待ち）／1 授精待ち／2 鑑定待ち／3 妊娠中
+const STG = ['発情','授精','鑑定','妊娠中','分娩'];
+function stageOf(t){
+  const r = repro(t);
+  if(r.pregnant) return {idx:3};
+  if(r.state === '授精済') return {idx:2};
+  if(plannedAI(t)) return {idx:1};
+  return {idx:0};
+}
+function stageBar(t){
+  const i = stageOf(t).idx, cls = ['warn','cur','cur','calm'][i];
+  return `<div class="stg">${STG.map((n,k) => `<span class="sg ${k<i?'done':k===i?cls:''}">${n}</span>`).join('')}</div>`;
 }
 // 発情の時に選んだ方法で、まだ授精（移植）が記録されていない発情を返す
 function plannedAI(tag){
@@ -762,17 +787,25 @@ function renderList(){
       <span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
       <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span>
       ${a.breed === '和牛' ? `<div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>` : ''}
+      ${isF && hasRepro(t) ? stageBar(t) : ''}
       <div>${st}</div></div>`;
   };
   const section = (title, arr) => `<div class="muted" style="margin:12px 0 6px;font-weight:bold">${title}（${arr.length}頭）</div>` + (arr.length ? arr.map(listItem).join('') : '<div class="muted">なし</div>');
   const isBreeder = t => { const a = db.animals[t]; return a.breed === '和牛' && a.sex === '雌' && !!last(t,'retain'); };
-  let rows;
-  if(breedF === '和牛'){
-    rows = section('繁殖牛（自家保留）', tags.filter(isBreeder)) + section('その他の和牛', tags.filter(t => !isBreeder(t)));
+  let rows, head = '';
+  if(breedF === '和牛' || breedF === 'ホルスタイン'){
+    const isBr = t => db.animals[t].sex === '雌' && (hasRepro(t) || (breedF === '和牛' && isBreeder(t)));
+    const br = tags.filter(isBr), other = tags.filter(t => !isBr(t));
+    const idxOf = t => stageOf(t).idx;
+    const n0 = br.filter(t => idxOf(t) <= 1), n2 = br.filter(t => idxOf(t) === 2), n3 = br.filter(t => idxOf(t) === 3);
+    const tile = (label, n, cls) => `<div class="tile ${cls}"><div style="font-size:26px;font-weight:bold">${n}</div><div style="font-size:13px">${label}</div></div>`;
+    head = `<div class="tiles">${tile('未受胎', n0.length, 't-warn')}${tile('鑑定待ち', n2.length, 't-info')}${tile('妊娠中', n3.length, 't-calm')}</div>`;
+    rows = section('未受胎（受胎を最優先）', n0) + section('授精済・鑑定待ち', n2) + section('妊娠中', n3) +
+      section(breedF === '和牛' ? 'その他の和牛' : 'その他のホルスタイン', other);
   } else {
     rows = tags.length ? tags.map(listItem).join('') : '<div class="muted">該当する個体がありません</div>';
   }
-  $('listBox').innerHTML = toggle + rows;
+  $('listBox').innerHTML = head + toggle + rows;
 
 }
 function renderAlerts(){
