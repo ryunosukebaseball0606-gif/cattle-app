@@ -735,8 +735,10 @@ function renderSettings(){
       <div class="row" style="margin-top:8px"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
       <button class="btn" data-act="saveSettings">保存</button>
     </div>
-    <h3>選択肢の管理</h3>
-    ${masters}
+    <details class="card">
+      <summary style="font-weight:bold;font-size:17px;padding:4px 0">選択肢の管理（タップで開く）</summary>
+      <div style="margin-top:8px">${masters}</div>
+    </details>
     <div class="card"><h3>データ</h3>
       <button class="btn" data-act="json">JSONで保存（バックアップ）</button><div style="height:8px"></div>
       <button class="btn sub" data-act="csvEv">イベントをCSVで保存</button><div style="height:8px"></div>
