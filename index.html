@@ -53,6 +53,18 @@
   .btnsmall{width:auto;padding:8px 14px;font-size:15px}
   h3{margin:6px 0 10px;font-size:17px}
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:12px 18px;border-radius:10px;font-size:15px;z-index:10;max-width:90%}
+  .pedwrap{overflow-x:auto;padding:6px 2px 12px;-webkit-overflow-scrolling:touch}
+  .ptree{display:flex;align-items:center}
+  .pkids{display:flex;flex-direction:column;justify-content:space-around;margin-left:14px;padding-left:14px;border-left:2px solid #94a3b8}
+  .pkid{position:relative;padding:5px 0}
+  .pkid::before{content:'';position:absolute;left:-14px;top:50%;width:14px;border-top:2px solid #94a3b8}
+  .pbox{min-width:124px;border:1.5px solid #94a3b8;border-radius:8px;padding:5px 8px;font-size:13px;background:#fff;color:#222}
+  .pbox.cow{cursor:pointer;border-color:#111827;border-width:2px}
+  .pbox.bull{background:#f8fafc}
+  .pbox.unk{color:#8a8a8a;border-style:dashed;background:transparent;font-size:12px}
+  .pbox .plab{display:block;font-size:11px;color:#555}
+  .pbox small{display:block;color:#666;font-size:11px}
+  .pbox .badge{margin-top:3px}
 </style>
 </head>
 <body>
@@ -416,24 +428,27 @@ function nodeHTML(n){
   if(n.kind === 'cow') return `<span class="lnk" data-tag="${esc(n.id)}">${esc(n.id)}</span> ${lineBadge(fatherLine(n.id))}`;
   return `${esc(n.id)} ${lineBadge(lineOfBull(n.id))}`;
 }
-// 四代（父母〜高祖父母）を世代ごとに集める。不明の先祖は表示しない
+// 四代血統を樹形図で描く（左が本人、右へ父・母と遡る）。不明の先祖は「不明」と表示
+// 母系をたどるときは、母の箱をタップすると、その牛の血統図に移れる
 function pedigreeHTML(tag){
-  const gens = [[],[],[],[]];
-  const walk = (node, g, path) => {
-    if(g > 4) return;
+  const box = (node, label) => {
+    if(node.kind === 'unknown') return `<div class="pbox unk"><span class="plab">${esc(label)}</span>不明</div>`;
+    if(node.kind === 'cow') return `<div class="pbox cow" data-tag="${esc(node.id)}"><span class="plab">${esc(label)}</span><b>${esc(shortId(node.id))}</b><small>${esc(node.id)}</small>${lineBadge(fatherLine(node.id))}</div>`;
+    return `<div class="pbox bull"><span class="plab">${esc(label)}</span><b>${esc(node.id)}</b>${lineBadge(lineOfBull(node.id))}</div>`;
+  };
+  const walk = (node, g, path, label) => {
+    const self = box(node, label);
+    if(g >= 4 || node.kind === 'unknown') return `<div class="ptree">${self}</div>`;
     const [s, d] = parentsOf(node);
     const sp = path ? path + 'の父' : '父';
     const dp = path ? path + 'の母' : '母';
-    if(s.kind !== 'unknown'){ gens[g-1].push({label:sp, node:s}); walk(s, g+1, sp); }
-    if(d.kind !== 'unknown'){ gens[g-1].push({label:dp, node:d}); walk(d, g+1, dp); }
+    return `<div class="ptree">${self}<div class="pkids">` +
+      `<div class="pkid">${walk(s, g+1, sp, sp)}</div>` +
+      `<div class="pkid">${walk(d, g+1, dp, dp)}</div>` +
+      `</div></div>`;
   };
-  walk({kind:'cow', id:tag}, 1, '');
-  const titles = ['第1代（父母）','第2代（祖父母）','第3代（曾祖父母）','第4代（高祖父母）'];
-  return titles.map((t,i) => `<div class="muted" style="margin-top:8px">${t}</div>` +
-    (gens[i].length
-      ? gens[i].map(x => `<div class="ev"><span><span class="muted">${esc(x.label)}</span>　${nodeHTML(x.node)}</span></div>`).join('')
-      : '<div class="muted">記録なし</div>')
-  ).join('');
+  return `<div class="pedwrap">${walk({kind:'cow', id:tag}, 0, '', '本人')}</div>` +
+    `<div class="muted" style="font-size:12px">横にスクロールできます。母の箱をタップすると、その牛の血統図に移ります。</div>`;
 }
 
 /* ---------- 表示 ---------- */
