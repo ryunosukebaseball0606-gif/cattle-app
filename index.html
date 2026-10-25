@@ -292,7 +292,7 @@ function statuses(tag){
     if(wean) out.push({t:'離乳済', c:'mute'});
     else if(age >= weanM) out.push({t:'離乳時期', c:'warn'});
     else out.push({t:'哺乳中', c:'info'});
-    if(a.breed === '和牛' && age >= shipM && !last(tag,'retain') && !hasRepro(tag)) out.push({t:'出荷・保留の判定', c:'warn'});
+    if(a.breed === '和牛' && age >= shipM && !last(tag,'retain') && !hasRepro(tag)) out.push({t:'出荷・保留の判定（未決定）', c:'bad'});
     else if(wean) out.push({t:'育成中', c:'info'});
   }
   return out;
@@ -332,7 +332,7 @@ function alerts(){
     if(a.birth && a.breed === '和牛' && !hasRepro(tag) && !last(tag,'retain')){
       const sm = S.shipM[a.breed] ?? 10;
       const left = dn(addMonths(a.birth, sm)) - T;
-      if(left <= S.warnDays) push(left, left <= 0 ? `${sm}ヶ月齢：出荷か自家保留かを判定してください` : `出荷・保留の判定まで${left}日`, left <= 0 ? 'warn' : 'info');
+      if(left <= S.warnDays) push(left, left <= 0 ? `${sm}ヶ月齢：出荷か自家保留かを必ず決めてください` : `出荷・保留の判定まで${left}日`, left <= 0 ? 'bad' : 'info');
     }
   }
   return out.sort((x,y) => x.left - y.left);
