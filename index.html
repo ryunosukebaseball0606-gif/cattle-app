@@ -133,6 +133,7 @@ const MASTER_DEF = {
 const LINES = ['田尻','藤良','気高'];
 const LINE_COLOR = {'田尻':'#c0392b','藤良':'#2e8b57','気高':'#2f6fb0'};
 const FEMALE_ONLY = ['estrus','ai','preg','calving','et','sale'];
+const REPRO_TYPES = ['estrus','ai','preg','calving','et'];
 const TYPES = {
   estrus:  {label:'発情', f:[]},
   ai:      {label:'授精', f:[{k:'sire', t:'master', m:'sire', label:'種牛'}]},
@@ -186,6 +187,7 @@ function build(d){
     weanM:  {'和牛':3,'ホルスタイン':2,'F1':2,'その他':2},
     shipM:  {'和牛':10,'ホルスタイン':10,'F1':10,'その他':10},
     warnDays: 14,
+    reproM: {'和牛':12,'ホルスタイン':12,'F1':12,'その他':12},
     ...(d.settings || {})
   };
   return {animals: d.animals || {}, events: d.events || [], masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}, updatedAt: d.updatedAt || 0};
@@ -484,11 +486,10 @@ function openTag(tag){
     <div style="margin-top:8px"><button class="btn sub btnsmall" data-act="editAnimal" data-arg="${esc(tag)}">編集</button></div>`;
   $('panel').classList.remove('hidden');
   // 雄には雌専用の項目を出さない（押せない表示）
-  $('typeGrid').innerHTML = Object.entries(TYPES).map(([k,t]) => {
-    const blocked = !isF && FEMALE_ONLY.includes(k);
-    return `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}" ${blocked?'disabled':''}>${t.label}</button>`;
+  $('typeGrid').innerHTML = Object.entries(TYPES).filter(([k]) => allowedType(a, k)).map(([k,t]) => {
+    return `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}">${t.label}</button>`;
   }).join('');
-  if(!isF && FEMALE_ONLY.includes(selType)){ selType = null; $('entryForm').classList.add('hidden'); }
+  if(selType && !allowedType(a, selType)){ selType = null; $('entryForm').classList.add('hidden'); }
   renderLineage(tag);
   renderHistory();
 }
@@ -542,6 +543,14 @@ function fieldHTML(f){
   if(f.t === 'id') return `<input id="${id}" inputmode="numeric" maxlength="10" placeholder="10桁の数字">`;
   if(f.t === 'num') return `<input id="${id}" type="number" step="0.1" inputmode="decimal" placeholder="例 285">`;
 }
+function allowedType(a, k){
+  if(a.sex !== '雌' && FEMALE_ONLY.includes(k)) return false;
+  if(REPRO_TYPES.includes(k) && a.birth){
+    const need = db.settings.reproM[a.breed] ?? 12;
+    if((ageM(a.birth) ?? 0) < need) return false;
+  }
+  return true;
+}
 function renderForm(){
   const T = TYPES[selType];
   $('entryForm').innerHTML = `
@@ -552,7 +561,7 @@ function renderForm(){
 }
 function recordEvent(){
   if(!cur || !selType) return;
-  if(!db.animals[cur] || (db.animals[cur].sex !== '雌' && FEMALE_ONLY.includes(selType))){ toast('この個体（雄）には記録できない項目です'); return; }
+  if(!db.animals[cur] || !allowedType(db.animals[cur], selType)){ toast('この個体には記録できない項目です'); return; }
   const T = TYPES[selType], data = {};
   const twin = $('f_count') && $('f_count').value === '双子';
   for(const f of T.f){
@@ -716,6 +725,7 @@ function renderSettings(){
       ${rowsFor('gest','妊娠期間（日）')}
       ${rowsFor('weanM','離乳月齢（ヶ月）')}
       ${rowsFor('shipM','出荷目安（ヶ月齢）')}
+      ${rowsFor('reproM','発情・授精ができる月齢（ヶ月）')}
       <div class="row" style="margin-top:8px"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
       <button class="btn" data-act="saveSettings">保存</button>
     </div>
