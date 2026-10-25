@@ -545,6 +545,10 @@ function fieldHTML(f){
 }
 function allowedType(a, k){
   if(a.sex !== '雌' && FEMALE_ONLY.includes(k)) return false;
+  if(k === 'wean' && a.birth){
+    const wm = db.settings.weanM[a.breed] ?? 2;
+    if((ageM(a.birth) ?? 0) > wm + 3) return false;
+  }
   if(REPRO_TYPES.includes(k) && a.birth){
     const need = db.settings.reproM[a.breed] ?? 12;
     if((ageM(a.birth) ?? 0) < need) return false;
