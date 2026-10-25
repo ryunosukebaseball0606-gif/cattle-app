@@ -788,12 +788,16 @@ function renderList(){
     const isF = a.sex === '雌';
     const bc = BREED_COLOR[a.breed] || '#9ca3af';
     const bt = bc === '#ffffff' ? '#111' : '#fff';
+    const isW = a.breed === '和牛';
+    const pedRow = isW ? (() => {
+      const p = malePed(t).filter(Boolean);
+      return `<div class="muted" style="font-size:13px;margin-top:4px">血統 ${p.length ? p.map(esc).join(' - ') : '未登録'} ／ 父系統 ${lineBadge(fatherLine(t))}</div>`;
+    })() : '';
     return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:14px solid ${bc};margin:0 -14px;padding:12px 14px">
-      <b class="tag" style="font-size:30px">${shortId(t)}</b> ${a.name ? `<b style="font-size:18px">${esc(a.name)}</b> ` : ''}<span class="muted">${esc(t)}</span>
-      ${a.breed === '和牛' && malePed(t).some(Boolean) ? `<div class="muted" style="font-size:13px;letter-spacing:.5px">${malePed(t).filter(Boolean).map(esc).join(' - ')}</div>` : ''}
-      <span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
-      <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span>
-      ${a.breed === '和牛' ? `<div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>` : ''}
+      <div><b class="tag" style="font-size:30px">${shortId(t)}</b> ${a.name ? `<b style="font-size:18px">${esc(a.name)}</b> ` : ''}<span class="muted">${esc(t)}</span></div>
+      <div style="margin-top:4px"><span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
+      <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span></div>
+      ${pedRow}
       ${isF && hasRepro(t) ? stageBar(t) : ''}
       <div>${st}</div></div>`;
   };
