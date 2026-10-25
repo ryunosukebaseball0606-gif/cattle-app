@@ -785,6 +785,26 @@ function jsonp(url){
     document.head.appendChild(s);
   });
 }
+function postForm(url, obj){
+  return new Promise((resolve) => {
+    let fr = document.getElementById('syncframe');
+    if(!fr){
+      fr = document.createElement('iframe');
+      fr.id = 'syncframe'; fr.name = 'syncframe';
+      fr.style.display = 'none';
+      document.body.appendChild(fr);
+    }
+    const f = document.createElement('form');
+    f.method = 'POST'; f.action = url; f.target = 'syncframe';
+    f.style.display = 'none';
+    const i = document.createElement('input');
+    i.type = 'hidden'; i.name = 'payload'; i.value = JSON.stringify(obj);
+    f.appendChild(i);
+    document.body.appendChild(f);
+    f.submit();
+    setTimeout(() => { f.remove(); resolve(); }, 1500);
+  });
+}
 async function pushSync(){
   const url = syncURL();
   if(!url || !syncReady) return;
@@ -793,8 +813,7 @@ async function pushSync(){
   const sent = db.updatedAt || 0;
   setSyncStatus('保存しています…');
   try{
-    await fetch(url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({updatedAt: sent, data: stateOnly()})});
+    await postForm(url, {updatedAt: sent, data: stateOnly()});
     let j = {updatedAt: 0};
     for(let i = 0; i < 6; i++){
       await new Promise(r => setTimeout(r, 3000));
