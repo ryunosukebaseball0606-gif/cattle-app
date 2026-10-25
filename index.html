@@ -233,6 +233,29 @@ function isNursing(t){
   const a = db.animals[t] || {}, age = ageM(a.birth);
   return age !== null && age < (db.settings.weanM[a.breed] ?? 2) && !last(t,'wean') && !isOut(t);
 }
+// 哺乳の進み具合バー：通常哺乳（0〜離乳の2週間前）→ 減乳（離乳の2週間前〜離乳）
+function weanBar(t){
+  const a = db.animals[t] || {};
+  if(!a.birth) return '';
+  const wm = db.settings.weanM[a.breed] ?? 2;
+  const bd = dn(a.birth), wd = dn(addMonths(a.birth, wm)), rd = wd - 14, T = todayN();
+  const span = Math.max(1, wd - bd);
+  const pos = Math.max(0, Math.min(100, (T - bd) / span * 100));
+  const rp = Math.max(0, Math.min(100, (rd - bd) / span * 100));
+  let phase, msg;
+  if(T < rd){ phase = '通常哺乳'; msg = `減乳まであと${rd - T}日`; }
+  else if(T < wd){ phase = '減乳'; msg = `離乳まであと${wd - T}日`; }
+  else { phase = '離乳'; msg = '離乳日です'; }
+  return `<div style="margin:8px 0 4px">
+    <div style="position:relative;height:22px;border-radius:11px;overflow:visible;display:flex">
+      <div style="width:${rp}%;background:#dde9f6;border-radius:11px 0 0 11px"></div>
+      <div style="flex:1;background:#fbeccc;border-radius:0 11px 11px 0"></div>
+      <div style="position:absolute;left:calc(${pos}% - 8px);top:3px;width:16px;height:16px;border-radius:50%;background:#111;border:2px solid #fff;box-shadow:0 0 0 1px #888"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-top:3px">
+      <span>0日</span><span style="font-weight:bold;color:#111">${T - bd}日齢・${phase}　${msg}</span><span>離乳${wd - bd}日</span>
+    </div></div>`;
+}
 function breedChipsHTML(withCalf){ return ['全て','和牛','ホルスタイン','F1','その他', ...(withCalf ? ['哺乳中'] : [])].map(b => `<button class="chip ${breedF===b?'on':''}" data-act="breedf" data-arg="${b}">${b}</button>`).join(''); }
 function setBreed(b){ breedF = b; renderList(); renderAlerts(); }
 function $(id){ return document.getElementById(id); }
@@ -555,6 +578,7 @@ function openTag(tag){
     ${a.name ? `<div style="font-size:22px;font-weight:bold;margin-top:4px">${esc(a.name)}</div>` : ''}
     <div class="muted">識別番号 ${esc(tag)}</div>
     <div>${st}</div>
+    ${isNursing(tag) ? weanBar(tag) : ''}
     <div class="muted">${esc(breedLabel(a))} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
     <div class="muted">${mother}</div>
     ${a.breed === '和牛' ? bloodlineHTML(tag) : ''}
@@ -799,7 +823,7 @@ function renderList(){
       <span class="muted">${esc(a.sex)}・${esc(isNursing(t) && a.birth ? `${todayN() - dn(a.birth)}日齢` : ageText(a.birth))}${due}</span></div>
       ${pedRow}
       ${isF && hasRepro(t) ? stageBar(t) : ''}
-      <div>${st}</div></div>`;
+      <div>${st}</div>${isNursing(t) ? weanBar(t) : ''}</div>`;
   };
   const section = (title, arr, id) => `<div ${id ? `id="${id}"` : ''} class="muted" style="margin:12px 0 6px;font-weight:bold;scroll-margin-top:12px">${title}（${arr.length}頭）</div>` + (arr.length ? arr.map(listItem).join('') : '<div class="muted">なし</div>');
   const isBreeder = t => { const a = db.animals[t]; return a.breed === '和牛' && a.sex === '雌' && !!last(t,'retain'); };
