@@ -471,7 +471,7 @@ function openTag(tag){
     extra += `<div class="muted">出産予定日：${r.due}${r.dueApprox ? '（概算）' : ''}</div>`;
     extra += `<div class="muted">予定の父：${r.base ? esc(r.base.data.sire) : '不明'}（${esc(sl)}）</div>`;
   }
-  const mother = a.mother ? `<span class="lnk" data-tag="${esc(a.mother)}">母 ${esc(a.mother)}</span>` : '母：不明';
+  const mother = a.mother ? `<span class="lnk" data-tag="${esc(a.mother)}">母 ${esc(a.mother)}</span>` : '';
   $('cowHead').className = 'card ' + (isF ? 'female' : 'male');
   $('cowHead').innerHTML = `
     <div class="tag" style="font-size:44px;line-height:1">${shortId(tag)} <span class="badge ${isF?'b-bad':'b-info'}" style="font-size:14px">${esc(a.sex)}</span></div>
@@ -479,7 +479,7 @@ function openTag(tag){
     <div>${st}</div>
     <div class="muted">${esc(a.breed)} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
     <div class="muted">${mother}</div>
-    ${bloodlineHTML(tag)}
+    ${a.breed === '和牛' ? bloodlineHTML(tag) : ''}
     ${extra}
     <div style="margin-top:8px"><button class="btn sub btnsmall" data-act="editAnimal" data-arg="${esc(tag)}">編集</button></div>`;
   $('panel').classList.remove('hidden');
@@ -499,9 +499,11 @@ function renderLineage(tag){
   const kids = children(tag);
   const kidsHtml = kids.length ? kids.map(k => {
     const n = children(k).length, a = db.animals[k];
-    return `<div class="ev"><span>${link(k)} <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}・父系統 ${lineBadge(fatherLine(k))}${n ? '・子'+n+'頭' : ''}</span></span></div>`;
+    const wk = a.breed === '和牛';
+    return `<div class="ev"><span>${link(k)} <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${wk ? '・父系統 ' + lineBadge(fatherLine(k)) : ''}${n ? '・子'+n+'頭' : ''}</span></span></div>`;
   }).join('') : '<div class="muted">子牛の記録なし</div>';
-  $('lineage').innerHTML = `<h3>四代血統</h3>${pedigreeHTML(tag)}<h3 style="margin-top:14px">母系（上流）</h3><div class="muted">${up}</div><h3 style="margin-top:14px">子牛（下流）</h3>${kidsHtml}`;
+  const isW = (db.animals[tag] || {}).breed === '和牛';
+  $('lineage').innerHTML = `${isW ? '<h3>四代血統</h3>' + pedigreeHTML(tag) : ''}<h3 style="margin-top:14px">母系（上流）</h3><div class="muted">${up}</div><h3 style="margin-top:14px">子牛（下流）</h3>${kidsHtml}`;
 }
 function renderHistory(){
   const ev = evOf(cur).slice(0,50);
@@ -611,7 +613,7 @@ function renderReg(tag){
   editing = tag || null;
   const a = tag ? db.animals[tag] : {breed:'和牛', sex:'雌', birth:'', mother:''};
   const ped = a.ped || {};
-  const sireOpts = [['','不明'], ...db.masters.sire.map(x => [x,x])];
+  const sireOpts = [['','（未選択）'], ...db.masters.sire.map(x => [x,x])];
   const mothers = Object.keys(db.animals).filter(t => db.animals[t].sex === '雌' && t !== tag).sort(natSort);
   $('regBox').innerHTML = `
     <h3>${tag ? '個体を編集' : '新しい個体を登録'}</h3>
@@ -619,11 +621,13 @@ function renderReg(tag){
     <div class="row"><span class="lbl">性別</span>${selHTML('rSex', SEX.map(x => [x,x]), a.sex)}</div>
     <div class="row"><span class="lbl">品種</span>${selHTML('rBreed', BREEDS.map(x => [x,x]), a.breed)}</div>
     <div class="row"><span class="lbl">生年月日</span><input type="date" id="rBirth" max="${todayS()}" value="${esc(a.birth||'')}"></div>
-    <div class="row"><span class="lbl">母</span>${selHTML('rMother', [['','不明'], ...mothers.map(x => [x,x])], a.mother||'')}</div>
-    <div class="muted" style="margin:6px 0">血統（オスの3代）。登録牛から生まれた子牛は自動で入るので、ここは外から入れた牛だけ入力します。</div>
-    <div class="row"><span class="lbl">父（精液）</span>${selHTML('rPf', sireOpts, ped.f||'')}</div>
-    <div class="row"><span class="lbl">祖父（母の父）</span>${selHTML('rPff', sireOpts, ped.ff||'')}</div>
-    <div class="row"><span class="lbl">曽祖父（母の母の父）</span>${selHTML('rPfff', sireOpts, ped.fff||'')}</div>
+    <div class="row"><span class="lbl">母</span>${selHTML('rMother', [['','（未選択）'], ...mothers.map(x => [x,x])], a.mother||'')}</div>
+    <div id="pedBox" class="${a.breed === '和牛' ? '' : 'hidden'}">
+      <div class="muted" style="margin:6px 0">血統（和牛のみ・オスの3代）。登録牛から生まれた子牛は自動で入るので、ここは外から入れた牛だけ入力します。</div>
+      <div class="row"><span class="lbl">父（精液）</span>${selHTML('rPf', sireOpts, ped.f||'')}</div>
+      <div class="row"><span class="lbl">祖父（母の父）</span>${selHTML('rPff', sireOpts, ped.ff||'')}</div>
+      <div class="row"><span class="lbl">曽祖父（母の母の父）</span>${selHTML('rPfff', sireOpts, ped.fff||'')}</div>
+    </div>
     <button class="btn" data-act="saveAnimal">${tag ? '保存' : '登録する'}</button>
     ${tag ? `<div style="height:8px"></div><button class="btn danger" data-act="delAnimal" data-arg="${esc(tag)}" data-confirm>この個体を削除</button>` : ''}
     <div id="regMsg" class="msg"></div>`;
@@ -636,7 +640,8 @@ function saveAnimal(){
   if(birth && birth > todayS()){ $('regMsg').textContent = '生年月日に未来の日付は入れられません'; return; }
   if(sex === '雄' && hasRepro(tag)){ $('regMsg').textContent = '繁殖の記録がある個体は、雄に変更できません'; return; }
   const prev = db.animals[tag] || {createdAt: new Date().toISOString()};
-  db.animals[tag] = {...prev, sex, breed: $('rBreed').value, birth, mother: $('rMother').value, ped: {f: $('rPf').value, ff: $('rPff').value, fff: $('rPfff').value}};
+  const isW = $('rBreed').value === '和牛';
+  db.animals[tag] = {...prev, sex, breed: $('rBreed').value, birth, mother: $('rMother').value, ped: isW ? {f: $('rPf').value, ff: $('rPff').value, fff: $('rPfff').value} : {}};
   save(); editing = null;
   show('input'); openTag(tag);
   toast('保存しました');
@@ -673,10 +678,10 @@ function renderList(){
     const bt = bc === '#ffffff' ? '#111' : '#fff';
     return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:14px solid ${bc};margin:0 -14px;padding:12px 14px">
       <b class="tag" style="font-size:30px">${shortId(t)}</b> <span class="muted">${esc(t)}</span>
-      <div class="muted" style="font-size:13px;letter-spacing:.5px">${malePed(t).map(n => esc(n || '不明')).join(' - ')}</div>
+      ${a.breed === '和牛' && malePed(t).some(Boolean) ? `<div class="muted" style="font-size:13px;letter-spacing:.5px">${malePed(t).filter(Boolean).map(esc).join(' - ')}</div>` : ''}
       <span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(a.breed)}</span>
       <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span>
-      <div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>
+      ${a.breed === '和牛' ? `<div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>` : ''}
       <div>${st}</div></div>`;
   }).join('') : '<div class="muted">該当する個体がありません</div>');
 }
@@ -1044,6 +1049,7 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('change', e => {
+  if(e.target.id === 'rBreed') $('pedBox').classList.toggle('hidden', e.target.value !== '和牛');
   const s = e.target;
   if(s.tagName !== 'SELECT') return;
   // 種牛の系統の設定
