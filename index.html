@@ -169,7 +169,7 @@ function findTags(q){
   const all = Object.keys(db.animals);
   if(ID_RE.test(q)) return all.includes(q) ? [q] : [];
   if(/^\d{4}$/.test(q)) return all.filter(t => shortId(t) === q).sort(natSort);
-  return all.filter(t => t.includes(q)).sort(natSort);
+  return all.filter(t => t.includes(q) || (db.animals[t].name && db.animals[t].name.includes(q))).sort(natSort);
 }
 
 /* ---------- データ ---------- */
@@ -476,6 +476,7 @@ function openTag(tag){
   $('cowHead').className = 'card ' + (isF ? 'female' : 'male');
   $('cowHead').innerHTML = `
     <div class="tag" style="font-size:44px;line-height:1">${shortId(tag)} <span class="badge ${isF?'b-bad':'b-info'}" style="font-size:14px">${esc(a.sex)}</span></div>
+    ${a.name ? `<div style="font-size:22px;font-weight:bold;margin-top:4px">${esc(a.name)}</div>` : ''}
     <div class="muted">識別番号 ${esc(tag)}</div>
     <div>${st}</div>
     <div class="muted">${esc(breedLabel(a))} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
@@ -621,6 +622,7 @@ function renderReg(tag){
     <div class="row"><span class="lbl">識別番号</span><input id="rTag" inputmode="numeric" maxlength="10" value="${esc(tag||'')}" ${tag ? 'disabled' : ''} placeholder="10桁の数字"></div>
     <div class="row"><span class="lbl">性別</span>${selHTML('rSex', SEX.map(x => [x,x]), a.sex)}</div>
     <div class="row"><span class="lbl">品種</span>${selHTML('rBreed', BREEDS.map(x => [x,x]), a.breed)}</div>
+    <div class="row ${a.breed === '和牛' ? '' : 'hidden'}" id="nameBox"><span class="lbl">名前</span><input id="rName" value="${esc(a.name||'')}" placeholder="名前（任意・和牛のみ）"></div>
     <div class="row ${a.breed === 'その他' ? '' : 'hidden'}" id="otherBox"><span class="lbl">品種名</span><input id="rBreedOther" value="${esc(a.breedOther||'')}" placeholder="品種名を入力（例：ジャージー）"></div>
     <div class="row"><span class="lbl">生年月日</span><input type="date" id="rBirth" max="${todayS()}" value="${esc(a.birth||'')}"></div>
     <div class="row"><span class="lbl">母</span>${selHTML('rMother', [['','（未選択）'], ...mothers.map(x => [x,x])], a.mother||'')}</div>
@@ -644,7 +646,7 @@ function saveAnimal(){
   const prev = db.animals[tag] || {createdAt: new Date().toISOString()};
   const isW = $('rBreed').value === '和牛';
   const isO = $('rBreed').value === 'その他';
-  db.animals[tag] = {...prev, sex, breed: $('rBreed').value, breedOther: isO ? ($('rBreedOther').value || '').trim() : '', birth, mother: $('rMother').value, ped: isW ? {f: $('rPf').value, ff: $('rPff').value, fff: $('rPfff').value} : {}};
+  db.animals[tag] = {...prev, sex, breed: $('rBreed').value, breedOther: isO ? ($('rBreedOther').value || '').trim() : '', name: isW ? ($('rName').value || '').trim() : '', birth, mother: $('rMother').value, ped: isW ? {f: $('rPf').value, ff: $('rPff').value, fff: $('rPfff').value} : {}};
   save(); editing = null;
   show('input'); openTag(tag);
   toast('保存しました');
@@ -680,7 +682,7 @@ function renderList(){
     const bc = BREED_COLOR[a.breed] || '#9ca3af';
     const bt = bc === '#ffffff' ? '#111' : '#fff';
     return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:14px solid ${bc};margin:0 -14px;padding:12px 14px">
-      <b class="tag" style="font-size:30px">${shortId(t)}</b> <span class="muted">${esc(t)}</span>
+      <b class="tag" style="font-size:30px">${shortId(t)}</b> ${a.name ? `<b style="font-size:18px">${esc(a.name)}</b> ` : ''}<span class="muted">${esc(t)}</span>
       ${a.breed === '和牛' && malePed(t).some(Boolean) ? `<div class="muted" style="font-size:13px;letter-spacing:.5px">${malePed(t).filter(Boolean).map(esc).join(' - ')}</div>` : ''}
       <span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
       <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span>
@@ -1058,7 +1060,7 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('change', e => {
-  if(e.target.id === 'rBreed'){ $('pedBox').classList.toggle('hidden', e.target.value !== '和牛'); $('otherBox').classList.toggle('hidden', e.target.value !== 'その他'); }
+  if(e.target.id === 'rBreed'){ $('pedBox').classList.toggle('hidden', e.target.value !== '和牛'); $('otherBox').classList.toggle('hidden', e.target.value !== 'その他'); $('nameBox').classList.toggle('hidden', e.target.value !== '和牛'); }
   const s = e.target;
   if(s.tagName !== 'SELECT') return;
   // 種牛の系統の設定
