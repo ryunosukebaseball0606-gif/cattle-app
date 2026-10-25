@@ -80,7 +80,7 @@
     <div class="card" id="cowHead"></div>
     <div class="card">
       <h3>イベントを記録</h3>
-      <div class="grid" id="typeGrid"></div>
+      <div id="typeGrid"></div>
       <div id="entryForm" class="hidden" style="margin-top:12px"></div>
     </div>
     <div class="card"><h3>血統・系譜</h3><div id="lineage"></div></div>
@@ -117,7 +117,7 @@ const KEY = 'cattle-app-v4';
 const DAY = 864e5;
 const BREEDS = ['和牛','ホルスタイン','F1','その他'];
 const SEX = ['雌','雄'];
-const ASSIST = ['自然分娩','介助','難産'];
+const ASSIST = ['自然分娩','介助','難産','死産'];
 const RESULT = ['陽性','陰性','要再検'];
 const MASTER_DEF = {
   sire:    {label:'種牛', list:[]},
@@ -126,41 +126,39 @@ const MASTER_DEF = {
   vaccine: {label:'ワクチン', list:[]},
   drug:    {label:'注射薬', list:[]},
   embryo:  {label:'胚の種類', list:[]},
-  dest:    {label:'出荷先', list:[]},
   cause:   {label:'死亡原因', list:[]},
   src:     {label:'導入元', list:['大和谷','中村','小嶋','小木','溝井','置戸町外']},
 };
 const LINES = ['田尻','藤良','気高'];
 const LINE_COLOR = {'田尻':'#c0392b','藤良':'#2e8b57','気高':'#2f6fb0'};
-const FEMALE_ONLY = ['estrus','ai','preg','calving','et','sale'];
-const REPRO_TYPES = ['estrus','ai','preg','calving','et'];
+const FEMALE_ONLY = ['estrus','ai','preg','calving'];
+const REPRO_TYPES = ['estrus','ai','preg','calving'];
+const HEALTH_TYPES = ['sick','vacc','inj'];
 const TYPES = {
   estrus:  {label:'発情', f:[]},
-  ai:      {label:'授精', f:[{k:'sire', t:'master', m:'sire', label:'種牛'}]},
+  ai:      {label:'授精', f:[{k:'method', t:'fixed', o:['人工授精','受精卵移植'], label:'方法'}, {k:'sire', t:'master', m:'sire', label:'種牛'}, {k:'embryo', t:'master', m:'embryo', label:'胚の種類', onlyIf:{k:'method', v:'受精卵移植'}}]},
   preg:    {label:'妊娠鑑定', f:[{k:'result', t:'fixed', o:RESULT, label:'結果'}]},
   calving: {label:'分娩', f:[
               {k:'assist', t:'fixed', o:ASSIST, label:'分娩の状態'},
-              {k:'count', t:'fixed', o:['1頭','双子'], label:'生まれた頭数'},
-              {k:'c1id', t:'id', label:'子1の識別番号'},
-              {k:'c1sex', t:'fixed', o:SEX, label:'子1の性別'},
-              {k:'c1breed', t:'fixed', o:BREEDS, label:'子1の品種'},
-              {k:'c2id', t:'id', label:'子2の識別番号', twin:true},
-              {k:'c2sex', t:'fixed', o:SEX, label:'子2の性別', twin:true},
-              {k:'c2breed', t:'fixed', o:BREEDS, label:'子2の品種', twin:true}]},
+              {k:'count', t:'fixed', o:['1頭','双子'], label:'生まれた頭数', live:true},
+              {k:'c1id', t:'id', label:'子1の識別番号', live:true},
+              {k:'c1sex', t:'fixed', o:SEX, label:'子1の性別', live:true},
+              {k:'c1breed', t:'fixed', o:BREEDS, label:'子1の品種', live:true},
+              {k:'c2id', t:'id', label:'子2の識別番号', twin:true, live:true},
+              {k:'c2sex', t:'fixed', o:SEX, label:'子2の性別', twin:true, live:true},
+              {k:'c2breed', t:'fixed', o:BREEDS, label:'子2の品種', twin:true, live:true}]},
   move:    {label:'移動', f:[{k:'barn', t:'master', m:'barn', label:'移動先'}]},
   weight:  {label:'体重', f:[{k:'kg', t:'num', label:'体重(kg)'}]},
   wean:    {label:'離乳', f:[]},
   sick:    {label:'診療', f:[{k:'disease', t:'multi', m:'disease', label:'病名・症状（複数選べます）'}]},
   vacc:    {label:'ワクチン', f:[{k:'vaccine', t:'master', m:'vaccine', label:'ワクチン'}]},
   inj:     {label:'注射', f:[{k:'drug', t:'master', m:'drug', label:'注射薬'}]},
-  et:      {label:'ET', f:[{k:'embryo', t:'master', m:'embryo', label:'胚の種類'}]},
-  ship:    {label:'出荷', f:[{k:'dest', t:'master', m:'dest', label:'出荷先'}]},
+  ship:    {label:'出荷', f:[{k:'seri', t:'num', label:'セリ番号'}, {k:'weight', t:'num', label:'体重(kg)', onlyBreed:'和牛'}, {k:'price', t:'num', label:'価格(千円)'}]},
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
-  sale:    {label:'販売', f:[{k:'seri', t:'num', label:'セリ番号'}, {k:'weight', t:'num', label:'体重(kg)', onlyBreed:'和牛'}, {k:'price', t:'num', label:'価格(千円)'}]},
   intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(千円)'}]},
 };
-const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','販売済','死亡'];
+const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','死亡'];
 const ID_RE = /^\d{10}$/;
 function shortId(t){ return String(t).slice(5, 9); }  // 1234567890 → 6789
 // 検索：10桁は完全一致、4桁は簡易番号（下4桁）一致、それ以外は部分一致
@@ -178,6 +176,11 @@ function load(){
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e) {}
   return build(d);
 }
+function migrateEv(e){
+  if(e.type === 'sale') return {...e, type:'ship'};
+  if(e.type === 'et') return {...e, type:'ai', data:{...(e.data || {}), method:'受精卵移植'}};
+  return e;
+}
 function build(d){
   const masters = {};
   Object.keys(MASTER_DEF).forEach(m => masters[m] = [...MASTER_DEF[m].list]);
@@ -190,7 +193,7 @@ function build(d){
     reproM: {'和牛':12,'ホルスタイン':12,'F1':12,'その他':12},
     ...(d.settings || {})
   };
-  return {animals: d.animals || {}, events: d.events || [], masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}, updatedAt: d.updatedAt || 0};
+  return {animals: d.animals || {}, events: (d.events || []).map(migrateEv), masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}, updatedAt: d.updatedAt || 0};
 }
 let db = load();
 function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty','1'); updateBadge(); scheduleSync(); }
@@ -237,7 +240,7 @@ function download(name, text, type){
 function toCSV(rows){ return '﻿' + rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n'); }
 
 /* ---------- 繁殖・状態 ---------- */
-function hasRepro(tag){ return evOf(tag).some(e => ['estrus','ai','preg','calving','et'].includes(e.type)); }
+function hasRepro(tag){ return evOf(tag).some(e => REPRO_TYPES.includes(e.type)); }
 function repro(tag){
   const a = db.animals[tag] || {};
   const gest = db.settings.gest[a.breed] || 283;
@@ -259,13 +262,12 @@ function repro(tag){
   else if(lc) r.state = '繁殖待ち';
   return r;
 }
-function isOut(tag){ return !!(last(tag,'dead') || last(tag,'ship') || last(tag,'sale')); }
+function isOut(tag){ return !!(last(tag,'dead') || last(tag,'ship')); }
 function statuses(tag){
   const a = db.animals[tag]; if(!a) return [];
   const S = db.settings;
   if(last(tag,'dead')) return [{t:'死亡', c:'bad'}];
   if(last(tag,'ship')) return [{t:'出荷済', c:'mute'}];
-  if(last(tag,'sale')) return [{t:'販売済', c:'mute'}];
   if(a.sex === '雌' && hasRepro(tag)){
     const r = repro(tag), out = [];
     if(r.count) out.push({t:'産次'+r.count, c:'mute'});
@@ -303,7 +305,7 @@ function alerts(){
       const r = repro(tag);
       if(r.pregnant){
         const left = dn(r.due) - T;
-        if(left >= 60 && left <= 92) push(left, `販売時期（分娩まで${left}日・2〜3ヶ月前）`, 'info');
+        if(left >= 60 && left <= 92) push(left, `出荷時期（分娩まで${left}日・2〜3ヶ月前）`, 'info');
         if(left <= S.warnDays) push(left, left < 0 ? `出産予定超過 ${-left}日（予定日 ${r.due}）` : `出産まで${left}日（予定日 ${r.due}）`, left < 0 ? 'bad' : 'warn');
       } else if(r.state === '授精済'){
         const left = dn(r.lastAi.date) + 60 - T;
@@ -486,10 +488,12 @@ function openTag(tag){
     <div style="margin-top:8px"><button class="btn sub btnsmall" data-act="editAnimal" data-arg="${esc(tag)}">編集</button></div>`;
   $('panel').classList.remove('hidden');
   // 雄には雌専用の項目を出さない（押せない表示）
-  $('typeGrid').innerHTML = Object.entries(TYPES).filter(([k]) => allowedType(a, k)).map(([k,t]) => {
-    return `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}">${t.label}</button>`;
+  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES], ['その他', ['move','weight','wean','ship','retain','dead','intro']]];
+  $('typeGrid').innerHTML = groupsDef.map(([title, keys]) => {
+    const btns = keys.filter(k => TYPES[k] && allowedType(tag, k)).map(k => `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}">${TYPES[k].label}</button>`).join('');
+    return btns ? `<div class="muted" style="margin:8px 0 4px">${title}</div><div class="grid">${btns}</div>` : '';
   }).join('');
-  if(selType && !allowedType(a, selType)){ selType = null; $('entryForm').classList.add('hidden'); }
+  if(selType && !allowedType(tag, selType)){ selType = null; $('entryForm').classList.add('hidden'); }
   renderLineage(tag);
   renderHistory();
 }
@@ -508,12 +512,17 @@ function renderLineage(tag){
   $('lineage').innerHTML = `${isW ? '<h3>四代血統</h3>' + pedigreeHTML(tag) : ''}<h3 style="margin-top:14px">母系（上流）</h3><div class="muted">${up}</div><h3 style="margin-top:14px">子牛（下流）</h3>${kidsHtml}`;
 }
 function renderHistory(){
-  const ev = evOf(cur).slice(0,50);
-  $('history').innerHTML = ev.length ? ev.map(e => {
+  const all = evOf(cur);
+  const item = e => {
     const sum = evSummary(e);
     return `<div class="ev"><div><b>${esc(TYPES[e.type]?.label || e.type)}</b> <span class="muted">${esc(e.date)}</span><br><span class="muted">${esc(sum)}</span></div>
       <button class="btn sub btnsmall" data-act="delEv" data-arg="${e.id}" data-confirm>削除</button></div>`;
-  }).join('') : '<div class="muted">まだ記録がありません</div>';
+  };
+  const block = (title, list) => `<h4 style="margin:10px 0 4px">${title}</h4>` + (list.length ? list.slice(0,30).map(item).join('') : '<div class="muted">記録なし</div>');
+  $('history').innerHTML =
+    block('繁殖の記録', all.filter(e => REPRO_TYPES.includes(e.type))) +
+    block('健康（診療・ワクチン・注射）', all.filter(e => HEALTH_TYPES.includes(e.type))) +
+    block('その他の記録', all.filter(e => !REPRO_TYPES.includes(e.type) && !HEALTH_TYPES.includes(e.type)));
 }
 function monthsBetween(a, b){
   const A = new Date(a + 'T00:00:00Z'), B = new Date(b + 'T00:00:00Z');
@@ -552,15 +561,23 @@ function fieldHTML(f){
 function fieldsFor(k, a){
   return TYPES[k].f.filter(f => !f.onlyBreed || (a && f.onlyBreed === a.breed));
 }
-function allowedType(a, k){
-  if(a.sex !== '雌' && FEMALE_ONLY.includes(k)) return false;
+function reproTypesFor(tag){
+  if(!hasRepro(tag)) return ['estrus','ai'];
+  const r = repro(tag);
+  if(r.pregnant) return ['calving'];
+  if(r.state === '授精済') return ['estrus','ai','preg'];
+  return ['estrus','ai'];
+}
+function allowedType(tag, k){
+  const a = db.animals[tag]; if(!a) return false;
+  if(REPRO_TYPES.includes(k)){
+    if(a.sex !== '雌') return false;
+    if(a.birth && (ageM(a.birth) ?? 0) < (db.settings.reproM[a.breed] ?? 12)) return false;
+    if(!reproTypesFor(tag).includes(k)) return false;
+  }
   if(k === 'wean' && a.birth){
     const wm = db.settings.weanM[a.breed] ?? 2;
     if((ageM(a.birth) ?? 0) > wm + 3) return false;
-  }
-  if(REPRO_TYPES.includes(k) && a.birth){
-    const need = db.settings.reproM[a.breed] ?? 12;
-    if((ageM(a.birth) ?? 0) < need) return false;
   }
   return true;
 }
@@ -568,24 +585,27 @@ function renderForm(){
   const T = TYPES[selType];
   $('entryForm').innerHTML = `
     <div class="row"><span class="lbl">日付</span><input type="date" id="evDate" value="${todayS()}"></div>
-    ${fieldsFor(selType, db.animals[cur]).map(f => `<div class="row ${f.twin?'twin hidden':''}"><span class="lbl">${esc(f.label)}</span>${fieldHTML(f)}</div>`).join('')}
+    ${fieldsFor(selType, db.animals[cur]).map(f => `<div class="row ${f.twin?'twin hidden':''} ${f.live?'live':''} ${f.onlyIf?'oif hidden':''}" ${f.onlyIf?`data-oif-k="${f.onlyIf.k}" data-oif-v="${f.onlyIf.v}"`:''}><span class="lbl">${esc(f.label)}</span>${fieldHTML(f)}</div>`).join('')}
     <button class="btn" data-act="record">記録する</button>`;
   $('entryForm').classList.remove('hidden');
 }
 function recordEvent(){
   if(!cur || !selType) return;
-  if(!db.animals[cur] || !allowedType(db.animals[cur], selType)){ toast('この個体には記録できない項目です'); return; }
+  if(!db.animals[cur] || !allowedType(cur, selType)){ toast('この個体には記録できない項目です'); return; }
   const data = {};
   const twin = $('f_count') && $('f_count').value === '双子';
   for(const f of fieldsFor(selType, db.animals[cur])){
     if(f.twin && !twin) continue;
+    if(f.onlyIf && data[f.onlyIf.k] !== f.onlyIf.v) continue;
+    if(f.live && data.assist === '死産') continue;
     let v = ($('f_'+f.k)?.value || '').trim();
     if(!v){ toast(f.label + 'を選択・入力してください'); return; }
     if(f.t === 'id' && !ID_RE.test(v)){ toast(f.label + 'は10桁の数字で入力してください'); return; }
     if(f.t === 'num'){ v = Number(v); if(!(v > 0)){ toast(f.label + 'を正しく入力してください'); return; } }
     data[f.k] = v;
   }
-  if(selType === 'calving'){
+  if(selType === 'calving' && data.assist === '死産'){ data.calves = []; }
+  else if(selType === 'calving'){
     const calves = [{id:data.c1id, sex:data.c1sex, breed:data.c1breed}];
     if(twin) calves.push({id:data.c2id, sex:data.c2sex, breed:data.c2breed});
     const ids = calves.map(c => c.id);
@@ -670,13 +690,13 @@ function renderList(){
   const q = $('search').value.trim();
   $('breedChips').innerHTML = breedChipsHTML();
   $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
-  const outFilter = ['出荷済','販売済','死亡'].includes(filterSt);
+  const outFilter = ['出荷済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
     .filter(t => (showOut || outFilter || !isOut(t)))
     .filter(t => breedF === '全て' || db.animals[t].breed === breedF)
     .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
     .sort(natSort);
-  const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '販売・出荷・死亡の牛も表示'}</button>`;
+  const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '出荷・死亡の牛も表示'}</button>`;
   $('listBox').innerHTML = toggle + (tags.length ? tags.map(t => {
     const a = db.animals[t], r = repro(t);
     const st = statuses(t).map(s => `<span class="badge b-${s.c}">${esc(s.t)}</span>`).join('');
@@ -1063,6 +1083,11 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('change', e => {
+  if(e.target.id === 'f_assist'){ document.querySelectorAll('.live').forEach(r => r.classList.toggle('hidden', e.target.value === '死産')); }
+  if(e.target.id && e.target.id.startsWith('f_')){
+    const k = e.target.id.slice(2);
+    document.querySelectorAll('.oif').forEach(r => { if(r.dataset.oifK === k) r.classList.toggle('hidden', e.target.value !== r.dataset.oifV); });
+  }
   if(e.target.id === 'rBreed'){ $('pedBox').classList.toggle('hidden', e.target.value !== '和牛'); $('otherBox').classList.toggle('hidden', e.target.value !== 'その他'); $('nameBox').classList.toggle('hidden', e.target.value !== '和牛'); }
   const s = e.target;
   if(s.tagName !== 'SELECT') return;
