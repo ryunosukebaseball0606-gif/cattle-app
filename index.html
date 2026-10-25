@@ -227,7 +227,12 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
-function breedChipsHTML(){ return ['全て','和牛','ホルスタイン','F1','その他'].map(b => `<button class="chip ${breedF===b?'on':''}" data-act="breedf" data-arg="${b}">${b}</button>`).join(''); }
+// 哺乳中：離乳前の子牛（品種を問わない）
+function isNursing(t){
+  const a = db.animals[t] || {}, age = ageM(a.birth);
+  return age !== null && age < (db.settings.weanM[a.breed] ?? 2) && !last(t,'wean') && !isOut(t);
+}
+function breedChipsHTML(withCalf){ return ['全て','和牛','ホルスタイン','F1','その他', ...(withCalf ? ['哺乳中'] : [])].map(b => `<button class="chip ${breedF===b?'on':''}" data-act="breedf" data-arg="${b}">${b}</button>`).join(''); }
 function setBreed(b){ breedF = b; renderList(); renderAlerts(); }
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -765,12 +770,12 @@ function delAnimal(tag){
 const BREED_COLOR = {'和牛':'#111827','ホルスタイン':'#ea580c','F1':'#9ca3af','その他':'#ffffff'};
 function renderList(){
   const q = $('search').value.trim();
-  $('breedChips').innerHTML = breedChipsHTML();
+  $('breedChips').innerHTML = breedChipsHTML(true);
   $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
   const outFilter = ['出荷済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
     .filter(t => (showOut || outFilter || !isOut(t)))
-    .filter(t => breedF === '全て' || db.animals[t].breed === breedF)
+    .filter(t => breedF === '全て' || (breedF === '哺乳中' ? isNursing(t) : db.animals[t].breed === breedF))
     .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
     .sort(natSort);
   const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '出荷・死亡の牛も表示'}</button>`;
@@ -810,7 +815,8 @@ function renderList(){
 }
 function renderAlerts(){
   $('breedChipsA').innerHTML = breedChipsHTML();
-  const list = alerts().filter(x => breedF === '全て' || (db.animals[x.tag] || {}).breed === breedF);
+  const bf = breedF === '哺乳中' ? '全て' : breedF;
+  const list = alerts().filter(x => bf === '全て' || (db.animals[x.tag] || {}).breed === bf);
   $('alertBox').innerHTML = list.length ? list.map(x => `
     <div class="item" data-tag="${esc(x.tag)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
