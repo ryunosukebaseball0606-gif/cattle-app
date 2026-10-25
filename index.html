@@ -148,7 +148,7 @@ const REPRO_TYPES = ['estrus','ai','preg','calving'];
 const HEALTH_TYPES = ['sick','vacc','inj'];
 const FATTEN_M = 30; // 自家肥育の肉用出荷月齢
 const TYPES = {
-  estrus:  {label:'発情', f:[]},
+  estrus:  {label:'発情', f:[{k:'method', t:'fixed', o:['通常受精','受精卵移植'], label:'授精の方法'}]},
   ai:      {label:'授精', f:[{k:'method', t:'fixed', o:['人工授精','受精卵移植'], label:'方法'}, {k:'sire', t:'master', m:'sire', label:'種牛'}, {k:'embryo', t:'master', m:'embryo', label:'胚の種類', onlyIf:{k:'method', v:'受精卵移植'}}]},
   preg:    {label:'妊娠鑑定', f:[{k:'result', t:'fixed', o:RESULT, label:'結果'}]},
   calving: {label:'分娩', f:[
@@ -311,6 +311,13 @@ function statuses(tag){
   }
   return out;
 }
+// 発情の時に選んだ方法で、まだ授精（移植）が記録されていない発情を返す
+function plannedAI(tag){
+  const e = last(tag,'estrus');
+  if(!e || !e.data || !e.data.method) return null;
+  if(evType(tag,'ai').some(x => x.date >= e.date)) return null;
+  return e;
+}
 function alerts(){
   const S = db.settings, T = todayN(), out = [];
   for(const tag of Object.keys(db.animals)){
@@ -320,6 +327,17 @@ function alerts(){
     if(a.sex === '雄' && last(tag,'retain') && a.birth){
       const left = dn(addMonths(a.birth, FATTEN_M)) - T;
       if(left <= 60) push(left, left <= 0 ? `${FATTEN_M}ヶ月齢：肉用出荷の時期` : `肉用出荷まで${left}日（${FATTEN_M}ヶ月齢）`, left <= 0 ? 'warn' : 'info');
+    }
+    if(a.sex === '雌'){
+      const pe = plannedAI(tag);
+      if(pe){
+        const isET = pe.data.method === '受精卵移植';
+        const left = dn(pe.date) + (isET ? 7 : 1) - T;
+        if(left <= (isET ? 1 : 0) && left >= -3){
+          if(isET) push(left, left === 1 ? '明日移植予定（発情から7日）' : left === 0 ? '今日移植です（発情から7日）' : `移植予定を${-left}日過ぎています（発情 ${pe.date}）`, left === 1 ? 'info' : left === 0 ? 'bad' : 'warn');
+          else push(left, left === 0 ? '受精してください（発情の翌日）' : `受精予定を${-left}日過ぎています（発情 ${pe.date}）`, left === 0 ? 'bad' : 'warn');
+        }
+      }
     }
     if(a.sex === '雌' && hasRepro(tag)){
       const r = repro(tag);
