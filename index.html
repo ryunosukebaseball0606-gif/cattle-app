@@ -60,7 +60,9 @@
 <nav>
   <button data-act="show" data-arg="input" class="on">入力</button>
   <button data-act="show" data-arg="alerts">アラート<span id="alBadge"></span></button>
-  <button data-act="show" data-arg="list">個体一覧</button>
+  <button data-act="allList" data-arg="list">個体一覧</button>
+  <button data-act="breedTab" data-arg="和牛" data-breed="和牛" style="font-size:13px">和牛</button>
+  <button data-act="breedTab" data-arg="ホルスタイン" data-breed="ホルスタイン" style="font-size:12px">ホルスタイン</button>
   <button data-act="newReg" data-arg="reg">登録</button>
   <button data-act="show" data-arg="set">設定</button>
 </nav>
@@ -426,7 +428,11 @@ function pedigreeHTML(tag){
 /* ---------- 表示 ---------- */
 function show(v){
   ['input','alerts','list','reg','set'].forEach(x => $('v-'+x).classList.toggle('hidden', x !== v));
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.arg === v));
+  document.querySelectorAll('nav button').forEach(b => {
+    const on = b.dataset.breed ? (v === 'list' && breedF === b.dataset.breed)
+      : (b.dataset.arg === v && !(v === 'list' && breedF !== '全て'));
+    b.classList.toggle('on', on);
+  });
   if(v === 'list') renderList();
   if(v === 'alerts') renderAlerts();
   if(v === 'set') renderSettings();
@@ -926,6 +932,8 @@ const ACT = {
   syncNow: () => pullSync(),
   toggleOut: () => { showOut = !showOut; renderList(); },
   breedf: b => setBreed(b),
+  allList: () => { breedF = '全て'; show('list'); },
+  breedTab: b => { breedF = b; show('list'); },
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
   confirmMaster: m => {
