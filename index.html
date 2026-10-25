@@ -796,7 +796,7 @@ function renderList(){
     return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:14px solid ${bc};margin:0 -14px;padding:12px 14px">
       <div><b class="tag" style="font-size:30px">${shortId(t)}</b> ${a.name ? `<b style="font-size:18px">${esc(a.name)}</b> ` : ''}<span class="muted">${esc(t)}</span></div>
       <div style="margin-top:4px"><span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
-      <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span></div>
+      <span class="muted">${esc(a.sex)}・${esc(isNursing(t) && a.birth ? `${todayN() - dn(a.birth)}日齢` : ageText(a.birth))}${due}</span></div>
       ${pedRow}
       ${isF && hasRepro(t) ? stageBar(t) : ''}
       <div>${st}</div></div>`;
