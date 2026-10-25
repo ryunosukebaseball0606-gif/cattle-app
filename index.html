@@ -763,6 +763,8 @@ function renderSettings(){
       <div style="height:12px"></div>
       <input type="file" accept="application/json" onchange="importJSON(this)" style="margin-top:12px">
       <div id="exportBox"></div>
+      <div style="height:16px"></div>
+      <button class="btn danger" data-act="clearAnimals" data-confirm>牛の情報をすべて消す（種牛・選択肢・設定は残す）</button>
     </div>`;
 }
 function uidSafe(s){ let h = 0; for(const c of s) h = (h*31 + c.charCodeAt(0)) >>> 0; return 'x' + h; }
@@ -957,6 +959,10 @@ const ACT = {
   },
   syncNow: () => pullSync(),
   toggleOut: () => { showOut = !showOut; renderList(); },
+  clearAnimals: () => {
+    db.animals = {}; db.events = [];
+    save(); show('set'); toast('牛の情報を消しました');
+  },
   breedf: b => setBreed(b),
   toggleMulti: arg => {
     const i = arg.indexOf('|'), hid = arg.slice(0, i), name = arg.slice(i + 1);
