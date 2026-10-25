@@ -656,6 +656,7 @@ function allowedType(tag, k){
     if(a.birth && (ageM(a.birth) ?? 0) < (db.settings.reproM[a.breed] ?? 12)) return false;
     if(!reproTypesFor(tag).includes(k)) return false;
   }
+  if(k === 'weight' && a.breed === 'ホルスタイン') return false;
   if(k === 'wean' && a.birth){
     const wm = db.settings.weanM[a.breed] ?? 2;
     if((ageM(a.birth) ?? 0) > wm + 3) return false;
