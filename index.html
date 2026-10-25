@@ -697,7 +697,7 @@ function renderList(){
     .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
     .sort(natSort);
   const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '出荷・死亡の牛も表示'}</button>`;
-  $('listBox').innerHTML = toggle + (tags.length ? tags.map(t => {
+  const listItem = t => {
     const a = db.animals[t], r = repro(t);
     const st = statuses(t).map(s => `<span class="badge b-${s.c}">${esc(s.t)}</span>`).join('');
     const due = r.pregnant ? ` ／ 出産予定 ${r.due}` : '';
@@ -711,7 +711,17 @@ function renderList(){
       <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span>
       ${a.breed === '和牛' ? `<div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>` : ''}
       <div>${st}</div></div>`;
-  }).join('') : '<div class="muted">該当する個体がありません</div>');
+  };
+  const section = (title, arr) => `<div class="muted" style="margin:12px 0 6px;font-weight:bold">${title}（${arr.length}頭）</div>` + (arr.length ? arr.map(listItem).join('') : '<div class="muted">なし</div>');
+  const isBreeder = t => { const a = db.animals[t]; return a.breed === '和牛' && a.sex === '雌' && !!last(t,'retain'); };
+  let rows;
+  if(breedF === '和牛'){
+    rows = section('繁殖牛（自家保留）', tags.filter(isBreeder)) + section('その他の和牛', tags.filter(t => !isBreeder(t)));
+  } else {
+    rows = tags.length ? tags.map(listItem).join('') : '<div class="muted">該当する個体がありません</div>';
+  }
+  $('listBox').innerHTML = toggle + rows;
+
 }
 function renderAlerts(){
   $('breedChipsA').innerHTML = breedChipsHTML();
