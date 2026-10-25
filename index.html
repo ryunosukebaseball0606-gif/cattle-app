@@ -145,9 +145,11 @@ const TYPES = {
               {k:'c1id', t:'id', label:'子1の識別番号', live:true},
               {k:'c1sex', t:'fixed', o:SEX, label:'子1の性別', live:true},
               {k:'c1breed', t:'fixed', o:BREEDS, label:'子1の品種', live:true},
+              {k:'c1name', t:'text', label:'子1の名前（和牛のみ・任意）', optional:true, onlyIf:{k:'c1breed', v:'和牛'}, live:true},
               {k:'c2id', t:'id', label:'子2の識別番号', twin:true, live:true},
               {k:'c2sex', t:'fixed', o:SEX, label:'子2の性別', twin:true, live:true},
-              {k:'c2breed', t:'fixed', o:BREEDS, label:'子2の品種', twin:true, live:true}]},
+              {k:'c2breed', t:'fixed', o:BREEDS, label:'子2の品種', twin:true, live:true},
+              {k:'c2name', t:'text', label:'子2の名前（和牛のみ・任意）', twin:true, optional:true, onlyIf:{k:'c2breed', v:'和牛'}, live:true}]},
   move:    {label:'移動', f:[{k:'barn', t:'master', m:'barn', label:'移動先'}]},
   weight:  {label:'体重', f:[{k:'kg', t:'num', label:'体重(kg)'}]},
   wean:    {label:'離乳', f:[]},
@@ -564,6 +566,7 @@ function fieldHTML(f){
     return `<input type="hidden" id="${id}" value=""><div class="chips" style="width:100%">${chips || '<span class="muted">選択肢がありません（設定の選択肢の管理で追加）</span>'}</div>`;
   }
   if(f.t === 'id') return `<input id="${id}" inputmode="numeric" maxlength="10" placeholder="10桁の数字">`;
+  if(f.t === 'text') return `<input id="${id}" placeholder="例 さくら子">`;
   if(f.t === 'num') return `<input id="${id}" type="number" step="0.1" inputmode="decimal" placeholder="例 285">`;
 }
 function fieldsFor(k, a){
@@ -612,6 +615,7 @@ function recordEvent(){
     if(f.onlyIf && data[f.onlyIf.k] !== f.onlyIf.v) continue;
     if(f.live && data.assist === '死産') continue;
     let v = ($('f_'+f.k)?.value || '').trim();
+    if(!v && f.optional){ data[f.k] = ''; continue; }
     if(!v){ toast(f.label + 'を選択・入力してください'); return; }
     if(f.t === 'id' && !ID_RE.test(v)){ toast(f.label + 'は10桁の数字で入力してください'); return; }
     if(f.t === 'num'){ v = Number(v); if(!(v > 0)){ toast(f.label + 'を正しく入力してください'); return; } }
@@ -619,13 +623,13 @@ function recordEvent(){
   }
   if(selType === 'calving' && data.assist === '死産'){ data.calves = []; }
   else if(selType === 'calving'){
-    const calves = [{id:data.c1id, sex:data.c1sex, breed:data.c1breed}];
-    if(twin) calves.push({id:data.c2id, sex:data.c2sex, breed:data.c2breed});
+    const calves = [{id:data.c1id, sex:data.c1sex, breed:data.c1breed, name:data.c1name||''}];
+    if(twin) calves.push({id:data.c2id, sex:data.c2sex, breed:data.c2breed, name:data.c2name||''});
     const ids = calves.map(c => c.id);
     if(ids.includes(cur)){ toast('母と同じ番号は入力できません'); return; }
     if(new Set(ids).size !== ids.length){ toast('子の番号が重なっています'); return; }
     data.calves = calves;
-    delete data.c1id; delete data.c1sex; delete data.c1breed; delete data.c2id; delete data.c2sex; delete data.c2breed;
+    delete data.c1id; delete data.c1sex; delete data.c1breed; delete data.c2id; delete data.c2sex; delete data.c2breed; delete data.c1name; delete data.c2name;
   }
   const date = $('evDate').value || todayS();
   if(date > todayS()){ toast('未来の日付は入力できません'); return; }
@@ -633,7 +637,7 @@ function recordEvent(){
   if(selType === 'calving'){
     for(const c of data.calves){
       if(!db.animals[c.id]){
-        db.animals[c.id] = {breed: c.breed, sex: c.sex, birth: date, mother: cur, line: '', createdAt: now};
+        db.animals[c.id] = {breed: c.breed, sex: c.sex, birth: date, mother: cur, line: '', name: c.breed === '和牛' ? (c.name || '') : '', createdAt: now};
       } else {
         db.animals[c.id].mother = db.animals[c.id].mother || cur;
         db.animals[c.id].birth = db.animals[c.id].birth || date;
