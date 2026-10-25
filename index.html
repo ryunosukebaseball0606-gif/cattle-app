@@ -624,7 +624,7 @@ function delAnimal(tag){
 }
 
 /* ---------- 一覧・アラート ---------- */
-const BREED_COLOR = {'和牛':'#8b5a2b','ホルスタイン':'#374151','F1':'#b45309','その他':'#9ca3af'};
+const BREED_COLOR = {'和牛':'#ea580c','ホルスタイン':'#111827','F1':'#16a34a','その他':'#9ca3af'};
 function renderList(){
   const q = $('search').value.trim();
   $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
@@ -637,10 +637,11 @@ function renderList(){
     const due = r.pregnant ? ` ／ 出産予定 ${r.due}` : '';
     const isF = a.sex === '雌';
     const bc = BREED_COLOR[a.breed] || '#9ca3af';
-    return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:8px solid ${bc};margin:0 -14px;padding:12px 14px">
+    return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:14px solid ${bc};margin:0 -14px;padding:12px 14px">
       <b class="tag" style="font-size:30px">${shortId(t)}</b> <span class="muted">${esc(t)}</span>
       <div class="muted" style="font-size:13px;letter-spacing:.5px">${malePed(t).map(n => esc(n || '不明')).join(' - ')}</div>
-      <span class="muted">${esc(a.sex)}・${esc(a.breed)}・${esc(ageText(a.birth))}${due}</span>
+      <span style="display:inline-block;background:${bc};color:#fff;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(a.breed)}</span>
+      <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${due}</span>
       <div class="muted">父系統 ${lineBadge(fatherLine(t))}</div>
       <div>${st}</div></div>`;
   }).join('') : '<div class="muted">該当する個体がありません</div>';
