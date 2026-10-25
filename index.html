@@ -169,6 +169,9 @@ function findTags(q){
 function load(){
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e) {}
+  return build(d);
+}
+function build(d){
   const masters = {};
   Object.keys(MASTER_DEF).forEach(m => masters[m] = [...MASTER_DEF[m].list]);
   Object.keys(d.masters || {}).forEach(m => masters[m] = d.masters[m]);
@@ -179,10 +182,10 @@ function load(){
     warnDays: 14,
     ...(d.settings || {})
   };
-  return {animals: d.animals || {}, events: d.events || [], masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}};
+  return {animals: d.animals || {}, events: d.events || [], masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}, updatedAt: d.updatedAt || 0};
 }
 let db = load();
-function save(){ localStorage.setItem(KEY, JSON.stringify(db)); updateBadge(); }
+function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty','1'); updateBadge(); scheduleSync(); }
 
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て';
@@ -661,6 +664,15 @@ function renderSettings(){
       </div>
     </div>`).join('');
   $('setBox').innerHTML = `
+    <div class="card"><h3>スプレッドシート同期</h3>
+      <div class="muted" style="margin-bottom:8px">二人の端末で同じデータを共有します。Apps ScriptのウェブアプリURLを貼り付けて保存してください。</div>
+      <input id="syncUrl" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(syncURL())}" style="width:100%">
+      <div style="height:8px"></div>
+      <button class="btn" data-act="saveSyncUrl">保存して同期</button>
+      <div style="height:8px"></div>
+      <button class="btn sub" data-act="syncNow">今すぐ同期</button>
+      <div id="syncStatus" class="muted" style="margin-top:8px">${esc(syncMsg || (syncURL() ? '' : '未接続（この端末だけに保存されています）'))}</div>
+    </div>
     <div class="card"><h3>種牛の系統（血統）</h3>
       <div class="muted" style="margin-bottom:8px">種牛ごとに系統（田尻・藤良・気高）を登録します。ここで決めると、その種牛を父とする子牛の血統が自動で決まります。変更すると、関連する個体すべてに即時反映されます。</div>
       ${sireRows}
@@ -733,6 +745,91 @@ function importJSON(input){
   r.readAsText(f);
 }
 
+/* ---------- スプレッドシート同期 ---------- */
+const SYNC_KEY = 'cattle-sync-url';
+let syncReady = false, syncing = false, pushAgain = false, syncTimer = null, syncMsg = '';
+function lsGet(k){ try { return localStorage.getItem(k) || ''; } catch(e){ return ''; } }
+function lsSet(k,v){ try { localStorage.setItem(k, v); } catch(e){} }
+function persistLocal(){ try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e){} }
+function syncURL(){ return lsGet(SYNC_KEY); }
+function setSyncStatus(t){ syncMsg = t; const el = $('syncStatus'); if(el) el.textContent = t; }
+function nowStr(){ return new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}); }
+function stateOnly(){ return {animals: db.animals, events: db.events, masters: db.masters, settings: db.settings, sireLine: db.sireLine, sirePed: db.sirePed}; }
+function hasData(x){ return Object.keys(x.animals).length > 0 || x.events.length > 0; }
+function mergeInto(base, add){
+  Object.entries(add.animals || {}).forEach(([t,a]) => { if(!base.animals[t]) base.animals[t] = a; });
+  const ids = new Set(base.events.map(e => e.id));
+  (add.events || []).forEach(e => { if(!ids.has(e.id)) base.events.push(e); });
+  Object.entries(add.masters || {}).forEach(([m,l]) => { base.masters[m] = [...new Set([...(base.masters[m] || []), ...l])]; });
+  Object.entries(add.sireLine || {}).forEach(([k,v]) => { if(!base.sireLine[k]) base.sireLine[k] = v; });
+  Object.entries(add.sirePed || {}).forEach(([k,v]) => { base.sirePed[k] = {...v, ...(base.sirePed[k] || {})}; });
+  return base;
+}
+function refreshView(){
+  const v = ['input','alerts','list','set'].find(x => !$('v-'+x).classList.contains('hidden'));
+  if(v) show(v); else updateBadge();
+}
+function scheduleSync(){
+  if(!syncURL() || !syncReady) return;
+  clearTimeout(syncTimer); syncTimer = setTimeout(pushSync, 800);
+}
+async function pushSync(){
+  const url = syncURL();
+  if(!url || !syncReady) return;
+  if(syncing){ pushAgain = true; return; }
+  syncing = true;
+  const sent = db.updatedAt || 0;
+  setSyncStatus('保存しています…');
+  try{
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({updatedAt: sent, data: stateOnly()})});
+    const j = await res.json();
+    if(j.stale){ return pullSync(); }
+    if(!j.ok) throw new Error(j.error || 'save failed');
+    if(db.updatedAt === sent) lsSet('cattle-dirty','');
+    lsSet('cattle-synced','1');
+    setSyncStatus('同期済み（' + nowStr() + '）');
+  }catch(e){
+    setSyncStatus('通信できないため、この端末に保存しています。つながると自動で同期します');
+  }finally{
+    syncing = false;
+    if(pushAgain){ pushAgain = false; scheduleSync(); }
+  }
+}
+async function pullSync(){
+  const url = syncURL();
+  if(!url) return;
+  setSyncStatus('同期しています…');
+  try{
+    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get&t=' + Date.now(), {cache:'no-store'});
+    const j = await res.json();
+    if(j.error) throw new Error(j.error);
+    syncReady = true;
+    const remote = j.updatedAt || 0, local = db.updatedAt || 0, rdata = j.data || {};
+    const needMerge = !!lsGet('cattle-dirty') || (!lsGet('cattle-synced') && hasData(db));
+    if(remote && needMerge){
+      db = mergeInto(build(rdata), db); db.updatedAt = Date.now(); persistLocal();
+      await pushSync();
+    } else if(!remote){
+      if(hasData(db)){ db.updatedAt = Date.now(); persistLocal(); await pushSync(); }
+      else setSyncStatus('接続しました（まだデータはありません）');
+    } else if(remote > local){
+      db = build(rdata); db.updatedAt = remote; persistLocal(); lsSet('cattle-synced','1');
+      setSyncStatus('最新のデータを読み込みました（' + nowStr() + '）');
+      refreshView();
+    } else if(local > remote){
+      await pushSync();
+    } else {
+      lsSet('cattle-synced','1');
+      setSyncStatus('同期済み（' + nowStr() + '）');
+    }
+  }catch(e){
+    setSyncStatus('通信できないため、この端末に保存しています。つながると自動で同期します');
+  }
+}
+window.addEventListener('online', () => pullSync());
+document.addEventListener('visibilitychange', () => { if(!document.hidden) pullSync(); });
+
 /* ---------- 操作の受付 ---------- */
 const ACT = {
   show: v => show(v),
@@ -746,6 +843,13 @@ const ACT = {
   delEv: id => { db.events = db.events.filter(e => e.id !== id); save(); openTag(cur); toast('削除しました'); },
   filter: f => { filterSt = f; renderList(); },
   saveSettings: () => saveSettings(),
+  saveSyncUrl: () => {
+    const u = ($('syncUrl').value || '').trim();
+    lsSet(SYNC_KEY, u);
+    if(!u){ syncReady = false; setSyncStatus('未接続（この端末だけに保存されています）'); toast('接続を解除しました'); return; }
+    syncReady = false; toast('接続しました'); pullSync();
+  },
+  syncNow: () => pullSync(),
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
   confirmMaster: m => {
     const n = ($('nm_'+m).value || '').trim();
@@ -868,6 +972,7 @@ document.addEventListener('change', e => {
 
 renderReg(null);
 show('input');
+pullSync();
 </script>
 </body>
 </html>
