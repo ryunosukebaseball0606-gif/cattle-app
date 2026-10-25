@@ -788,8 +788,8 @@ function renderAlerts(){
 /* ---------- 設定 ---------- */
 function renderSettings(){
   const S = db.settings;
-  const rowsFor = (key, label) => `<div class="muted" style="margin-top:8px">${label}</div>` +
-    BREEDS.map(b => `<div class="row"><span class="lbl">${b}</span><input type="number" min="0" step="1" data-set="${key}" data-b="${b}" value="${S[key][b] ?? ''}"></div>`).join('');
+  const rowsFor = (key, label) => `<div style="margin-top:20px;margin-bottom:4px;font-weight:bold;font-size:17px">${label}</div>` +
+    BREEDS.map(b => `<div class="row" style="margin:10px 0"><span class="lbl">${b}</span><input type="number" min="0" step="1" data-set="${key}" data-b="${b}" value="${S[key][b] ?? ''}"></div>`).join('');
   const sireRows = db.masters.sire.length ? db.masters.sire.map(s => {
     const id = uidSafe(s), p = db.sirePed[s] || {};
     return `<div class="card" style="padding:10px">
@@ -829,7 +829,8 @@ function renderSettings(){
       ${rowsFor('weanM','離乳月齢（ヶ月）')}
       ${rowsFor('shipM','出荷目安（ヶ月齢）')}
       ${rowsFor('reproM','発情・授精ができる月齢（ヶ月）')}
-      <div class="row" style="margin-top:8px"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
+      <div style="margin-top:20px;margin-bottom:4px;font-weight:bold;font-size:17px">アラートの警告日数</div>
+      <div class="row" style="margin:10px 0"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
       <button class="btn" data-act="saveSettings">保存</button>
     </details>
     <details class="card">
