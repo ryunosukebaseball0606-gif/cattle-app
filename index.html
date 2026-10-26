@@ -93,7 +93,7 @@
   <button data-act="allList" data-arg="list">個体一覧</button>
   <button data-act="breedTab" data-arg="和牛" data-breed="和牛" data-hide-for="子牛係" style="font-size:13px">和牛</button>
   <button data-act="breedTab" data-arg="ホルスタイン" data-breed="ホルスタイン" data-hide-for="子牛係" style="font-size:12px">ホルスタイン</button>
-  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" data-hide-for="繁殖係" style="font-size:12px">哺乳子牛</button>
+  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" data-hide-for="繁殖係" style="font-size:12px">子牛・育成</button>
   <button data-act="newReg" data-arg="reg">登録</button>
   <button data-act="show" data-arg="set">設定</button>
 </nav>
@@ -191,6 +191,7 @@ const TYPES = {
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
   cured:   {label:'治癒', f:[]},
+  measure: {label:'体高・胸囲', f:[{k:'height', t:'num', label:'体高(cm)'}, {k:'girth', t:'num', label:'胸囲(cm)', optional:true}, {k:'kg', t:'num', label:'体重(kg・測った時だけ)', optional:true}]},
   intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(千円)'}]},
 };
 const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','死亡'];
@@ -225,9 +226,11 @@ function build(d){
     weanM:  {'和牛':3,'ホルスタイン':2,'F1':2,'その他':2},
     shipM:  {'和牛':10,'ホルスタイン':10,'F1':10,'その他':10},
     warnDays: 14,
-    reproM: {'和牛':12,'ホルスタイン':12,'F1':12,'その他':12},
+    reproM: {'和牛':13,'ホルスタイン':13,'F1':13,'その他':13},
     ...(d.settings || {})
   };
+  // 繁殖供用の月齢を13ヶ月に統一（保存済みの古い12ヶ月の設定を一度だけ置き換える）
+  if(!settings.reproV2){ settings.reproM = {'和牛':13,'ホルスタイン':13,'F1':13,'その他':13}; settings.reproV2 = true; }
   return {animals: d.animals || {}, events: (d.events || []).map(migrateEv), masters, settings, sireLine: d.sireLine || {}, sirePed: d.sirePed || {}, updatedAt: d.updatedAt || 0};
 }
 let db = load();
@@ -237,12 +240,14 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
 let role = '全体', curView = 'input';
-const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move'], '繁殖係':['estrus','ai','preg','calving']};
+const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
 function roleTag(t){
-  if(role === '子牛係') return isNursing(t) || !!activeSick(t);
-  if(role === '繁殖係') return (db.animals[t] || {}).sex === '雌' && hasRepro(t);
+  // 生年月日が未入力の牛は、どの係からも見えるように両方に出す
+  if(ageM((db.animals[t] || {}).birth) === null) return true;
+  if(role === '子牛係') return isCalfRole(t);
+  if(role === '繁殖係') return isBreedingCow(t);
   return true;
 }
 function saveView(){
@@ -403,6 +408,37 @@ function statuses(tag){
   }
   return out;
 }
+// 種付け（繁殖供用）の目安：和牛は13〜15ヶ月・体重300kg・体高120cm以上、ホルスタインは13ヶ月・体重350kg・体高125cm以上
+const BREED_MIN = {'和牛':{h:120,kg:300}, 'ホルスタイン':{h:125,kg:350}};
+// 繁殖係の牛：雌で、繁殖の記録があるか、種付け開始月齢に達している
+function isBreedingCow(t){
+  const a = db.animals[t] || {};
+  if(a.sex !== '雌') return false;
+  if(hasRepro(t)) return true;
+  const age = ageM(a.birth);
+  return age !== null && age >= (db.settings.reproM[a.breed] ?? 13);
+}
+// 子牛係の牛：生まれてから種付け開始前まで（哺乳子牛・育成牛）
+function isCalfRole(t){
+  const age = ageM((db.animals[t] || {}).birth);
+  return age !== null && !isBreedingCow(t);
+}
+// 種付け判定：体高と体重（実測）で判定。体重未測定のときは未達扱い
+function readyInfo(t){
+  const a = db.animals[t] || {}, mm = BREED_MIN[a.breed] || {h:0, kg:0};
+  const m = last(t,'measure'), d = (m && m.data) || {};
+  const h = Number(d.height) || 0, g = Number(d.girth) || 0, kg = Number(d.kg) || 0;
+  const ok = h >= mm.h && kg >= mm.kg;
+  const txt = `体高 ${h ? h + 'cm' : '未測定'}（基準${mm.h}cm）／ 体重 ${kg ? kg + 'kg' : '未測定'}（基準${mm.kg}kg）` + (g ? ` ／ 胸囲 ${g}cm` : '');
+  return {ok, txt};
+}
+// 繁殖係の雌で、まだ授精していない牛の判定行
+function readyLine(t){
+  const a = db.animals[t] || {};
+  if(!(a.sex === '雌' && !hasRepro(t) && isBreedingCow(t) && BREED_MIN[a.breed])) return '';
+  const rd = readyInfo(t);
+  return `<div style="font-size:13px;margin-top:4px;font-weight:bold;color:${rd.ok ? '#1f5a3c' : '#7a4f00'}">種付け判定：${rd.ok ? 'OK' : '未達'}　<span style="font-weight:normal">${esc(rd.txt)}</span></div>`;
+}
 // 繁殖の進み具合：0 未受胎（発情待ち）／1 授精待ち／2 鑑定待ち／3 妊娠中
 const STG = ['発情','授精','鑑定','妊娠中','分娩'];
 function stageOf(t){
@@ -443,6 +479,13 @@ function alerts(){
           else push(left, left === 0 ? '受精してください（発情の翌日）' : `受精予定を${-left}日過ぎています（発情 ${pe.date}）`, left === 0 ? 'bad' : 'warn');
         }
       }
+    }
+    if(a.sex === '雌' && !hasRepro(tag) && a.birth && BREED_MIN[a.breed]){
+      const age = ageM(a.birth);
+      if(age !== null && age >= (S.reproM[a.breed] ?? 13) && !readyInfo(tag).ok)
+        push(0, `種付け判定：未達（${readyInfo(tag).txt}）`, 'warn');
+      if(age !== null && a.breed === '和牛' && age >= 14)
+        push(0, '14ヶ月齢・発情未確認：獣医師に相談', 'bad');
     }
     if(a.sex === '雌' && hasRepro(tag)){
       const r = repro(tag);
@@ -641,7 +684,7 @@ function openTag(tag){
   $('panel').classList.remove('hidden');
   // 雄には雌専用の項目を出さない（押せない表示）
   $('typeGrid').after($('entryForm'));
-  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES], ['その他', ['move','weight','wean','ship','retain','dead','intro']]];
+  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES], ['その他', ['move','weight','measure','wean','ship','retain','dead','intro']]];
   $('typeGrid').innerHTML = groupsDef.map(([title, keys]) => {
     const btns = keys.filter(k => TYPES[k] && allowedType(tag, k)).map(k => `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}">${TYPES[k].label}</button>`).join('');
     return btns ? `<div class="muted" style="margin:8px 0 4px">${title}</div><div class="grid">${btns}</div>` : '';
@@ -857,7 +900,7 @@ function renderList(){
   const outFilter = ['出荷済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
     .filter(t => (showOut || outFilter || !isOut(t)))
-    .filter(t => breedF === '全て' || (breedF === '哺乳中' ? isNursing(t) : db.animals[t].breed === breedF))
+    .filter(t => breedF === '全て' || (breedF === '哺乳中' ? isCalfRole(t) : db.animals[t].breed === breedF))
     .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
     .sort(natSort);
   const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '出荷・死亡の牛も表示'}</button>`;
@@ -879,6 +922,7 @@ function renderList(){
       <div style="margin-top:4px"><span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
       <span class="muted">${esc(a.sex)}・${esc(isNursing(t) && a.birth ? `${todayN() - dn(a.birth)}日齢` : ageText(a.birth))}${due}</span></div>
       ${pedRow}
+      ${readyLine(t)}
       ${isF && hasRepro(t) ? stageBar(t) : ''}
       <div>${st}</div>${isNursing(t) ? weanBar(t) : ''}</div>`;
   };
@@ -886,7 +930,7 @@ function renderList(){
   const isBreeder = t => { const a = db.animals[t]; return a.breed === '和牛' && a.sex === '雌' && !!last(t,'retain'); };
   let rows, head = '';
   if(breedF === '和牛' || breedF === 'ホルスタイン'){
-    const isBr = t => db.animals[t].sex === '雌' && (hasRepro(t) || (breedF === '和牛' && isBreeder(t)));
+    const isBr = t => db.animals[t].sex === '雌' && isBreedingCow(t);
     const br = tags.filter(isBr), other = tags.filter(t => !isBr(t));
     const idxOf = t => stageOf(t).idx;
     const n0 = br.filter(t => idxOf(t) <= 1), n2 = br.filter(t => idxOf(t) === 2), n3 = br.filter(t => idxOf(t) === 3);
