@@ -423,13 +423,13 @@ function isCalfRole(t){
   const age = ageM((db.animals[t] || {}).birth);
   return age !== null && !isBreedingCow(t);
 }
-// 種付け判定：体高と体重（実測）で判定。体重未測定のときは未達扱い
+// 種付け判定：体高で判定する（体重は設備がないため判定に使わない。測った時だけ参考表示）
 function readyInfo(t){
   const a = db.animals[t] || {}, mm = BREED_MIN[a.breed] || {h:0, kg:0};
   const m = last(t,'measure'), d = (m && m.data) || {};
   const h = Number(d.height) || 0, g = Number(d.girth) || 0, kg = Number(d.kg) || 0;
-  const ok = h >= mm.h && kg >= mm.kg;
-  const txt = `体高 ${h ? h + 'cm' : '未測定'}（基準${mm.h}cm）／ 体重 ${kg ? kg + 'kg' : '未測定'}（基準${mm.kg}kg）` + (g ? ` ／ 胸囲 ${g}cm` : '');
+  const ok = h >= mm.h;
+  const txt = `体高 ${h ? h + 'cm' : '未測定'}（基準${mm.h}cm）` + (kg ? ` ／ 体重 ${kg}kg（参考）` : '') + (g ? ` ／ 胸囲 ${g}cm` : '');
   return {ok, txt};
 }
 // 繁殖係の雌で、まだ授精していない牛の判定行
