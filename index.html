@@ -246,7 +246,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
 let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null;
-const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure'], '繁殖係':['estrus','ai','preg','calving','measure']};
+const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure','ship','retain'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
 function roleTag(t){
@@ -895,6 +895,7 @@ function placeForm(k){
   const btn = document.querySelector(`#typeGrid [data-arg="${k}"]`);
   const ef = $('entryForm');
   if(btn && btn.closest('.grid')) btn.closest('.grid').after(ef);
+  else if(!btn) $('cowHead').after(ef);
 }
 function allowedType(tag, k){
   const a = db.animals[tag]; if(!a) return false;
