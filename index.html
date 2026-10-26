@@ -49,6 +49,7 @@
   .sg.cur{background:#2a5b8c;color:#fff;font-weight:bold}
   .sg.calm{background:#6fae8c;color:#fff;font-weight:bold}
   .tbox{border:3px solid #c0392b;background:#fdecea;color:#7a1f1f;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
+  .hbox{border:3px solid #b91c1c;background:#fde8e8;color:#7f1d1d;border-radius:8px;padding:6px 10px;margin:6px 0;font-weight:bold}
   .obox{border:3px solid #d97706;background:#fff4e0;color:#7a4300;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
   .tiles{display:flex;gap:8px;margin-bottom:12px}
   .tile{flex:1;border-radius:10px;padding:8px 4px;text-align:center}
@@ -166,7 +167,7 @@ const LINES = ['田尻','藤良','気高'];
 const LINE_COLOR = {'田尻':'#c0392b','藤良':'#2e8b57','気高':'#2f6fb0'};
 const FEMALE_ONLY = ['estrus','ai','preg','calving'];
 const REPRO_TYPES = ['estrus','ai','preg','calving'];
-const HEALTH_TYPES = ['sick','vacc','inj','cured'];
+const HEALTH_TYPES = ['sick','vacc','inj','cured','hyg'];
 const FATTEN_M = 30; // 自家肥育の肉用出荷月齢
 const TYPES = {
   estrus:  {label:'発情', f:[{k:'method', t:'fixed', o:['通常受精','受精卵移植'], label:'授精の方法'}]},
@@ -193,6 +194,7 @@ const TYPES = {
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
   cured:   {label:'治癒', f:[]},
+  hyg:     {label:'衛生管理', f:[]},
   measure: {label:'体高・胸囲', f:[{k:'height', t:'num', label:'体高(cm)'}, {k:'girth', t:'num', label:'胸囲(cm)', optional:true}, {k:'kg', t:'num', label:'体重(kg・測った時だけ)', optional:true}]},
   intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(千円)'}]},
 };
@@ -440,6 +442,53 @@ function statuses(tag){
   }
   return out;
 }
+// 衛生管理プログラム（子牛）：日齢で実施。実施の記録は「衛生管理」イベントで残す
+const HYG = [
+  {k:'navel',     label:'臍の緒消毒',           day:0},
+  {k:'colostrum', label:'初乳給与',             day:0},
+  {k:'iron',      label:'鉄剤・ビタミン剤',      day:3},
+  {k:'tri7',      label:'トライキル①（7日齢）',  day:7},
+  {k:'tri30',     label:'トライキル②（30日齢）', day:30},
+  {k:'tri60',     label:'トライキル③（60日齢）', day:60},
+  {k:'castrate',  label:'去勢（4ヶ月齢）',       months:4, sex:'雄'},
+];
+// 生後200日以内の子牛だけ対象（成牛に古い予定が出ないように）。導入前の予定は対象外
+function hygDueN(t, h){
+  const a = db.animals[t] || {};
+  if(!a.birth) return null;
+  if(h.sex && a.sex !== h.sex) return null;
+  const bn = dn(a.birth);
+  if(todayN() - bn > 200) return null;
+  const due = h.months ? dn(addMonths(a.birth, h.months)) : bn + h.day;
+  const intro = last(t,'intro');
+  if(intro && due < dn(intro.date)) return null;
+  return due;
+}
+// 未実施の衛生管理（期限が近い順）
+function hygStatus(t){
+  const done = new Set(evType(t,'hyg').map(e => (e.data || {}).k));
+  const out = [];
+  for(const h of HYG){
+    if(done.has(h.k)) continue;
+    const dueN = hygDueN(t, h);
+    if(dueN === null) continue;
+    out.push({h, dueN, left: dueN - todayN()});
+  }
+  return out.sort((x, y) => x.dueN - y.dueN);
+}
+function hygLine(t){
+  const p = hygStatus(t); if(!p.length) return '';
+  const n = p[0];
+  if(n.left < 0) return `<div class="hbox">⚠ 衛生管理 期限超過：${esc(n.h.label)}（${-n.left}日過ぎ）</div>`;
+  if(n.left > 14) return '';
+  return `<div class="muted" style="font-size:13px;margin-top:4px">次の衛生管理：${esc(n.h.label)}（あと${n.left}日）</div>`;
+}
+function hygActs(t){
+  const p = hygStatus(t).filter(x => x.left <= 14);
+  if(!p.length) return '';
+  return `<div class="card" style="padding:8px 10px;margin:8px 0"><div style="font-weight:bold;margin-bottom:6px">衛生管理</div>` +
+    p.map(x => `<div class="row" style="margin:6px 0;gap:8px;flex-wrap:wrap"><span class="${x.left < 0 ? 'hbox' : ''}" style="flex:1;${x.left < 0 ? '' : 'font-weight:bold'}">${esc(x.h.label)}　${x.left < 0 ? '期限超過' + (-x.left) + '日' : x.left === 0 ? '今日' : 'あと' + x.left + '日'}</span><button class="btn btnsmall" data-act="hygDone" data-arg="${x.h.k}">実施した</button></div>`).join('') + `</div>`;
+}
 // 種付け（繁殖供用）の目安：和牛は13〜15ヶ月・体重300kg・体高120cm以上、ホルスタインは13ヶ月・体重350kg・体高125cm以上
 const BREED_MIN = {'和牛':{h:120,kg:300}, 'ホルスタイン':{h:125,kg:350}};
 // 繁殖係の牛：雌で、繁殖の記録があるか、種付け開始月齢に達している
@@ -520,6 +569,10 @@ function alerts(){
           else push(left, left === 0 ? '受精してください（発情の翌日）' : `受精予定を${-left}日過ぎています（発情 ${pe.date}）`, left === 0 ? 'bad' : 'warn');
         }
       }
+    }
+    for(const x of hygStatus(tag)){
+      if(x.left < 0) push(x.left, `${x.h.label} 期限超過${-x.left}日`, 'bad');
+      else if(x.left <= 1) push(x.left, `${x.h.label}：${x.left === 0 ? '今日' : '明日'}が予定日`, 'info');
     }
     const ts = treatState(tag);
     if(ts && ts.st === '治療中'){
@@ -722,6 +775,7 @@ function openTag(tag){
     <div>${st}</div>
     ${treatBox(tag)}
     ${treatActs(tag)}
+    ${hygActs(tag)}
     ${isNursing(tag) ? weanBar(tag) : ''}
     <div class="muted">${esc(breedLabel(a))} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
     <div class="muted">${mother}</div>
@@ -731,7 +785,7 @@ function openTag(tag){
   $('panel').classList.remove('hidden');
   // 雄には雌専用の項目を出さない（押せない表示）
   $('typeGrid').after($('entryForm'));
-  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES], ['その他', ['move','weight','measure','wean','ship','retain','dead','intro']]];
+  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES.filter(k => !['vacc','hyg'].includes(k))], ['その他', ['move','weight','measure','wean','ship','retain','dead','intro']]];
   $('typeGrid').innerHTML = groupsDef.map(([title, keys]) => {
     const btns = keys.filter(k => TYPES[k] && allowedType(tag, k)).map(k => `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}">${TYPES[k].label}</button>`).join('');
     return btns ? `<div class="muted" style="margin:8px 0 4px">${title}</div><div class="grid">${btns}</div>` : '';
@@ -776,6 +830,7 @@ function monthsBetween(a, b){
 }
 function evSummary(e){
   const d = e.data || {};
+  if(e.type === 'hyg') return (HYG.find(h => h.k === d.k) || {label: d.k}).label;
   if(e.type === 'intro'){
     const an = db.animals[e.tag], am = (an && an.birth) ? monthsBetween(an.birth, e.date) : null;
     return [d.src, d.price ? `買取 ${d.price}千円` : '', am !== null ? `導入時 ${am}ヶ月` : '生年月日未登録'].filter(Boolean).join(' ／ ');
@@ -984,7 +1039,7 @@ function matchBreedF(t){
 // 並べ替え：番号順／月齢が若い順／月齢が高い順（哺乳・育成のとき）
 function sortCmp(a, b){
   if(breedF === '哺乳中'){
-    const rk = t => { const st = (treatState(t) || {}).st; return st === '治療中' ? 0 : st === '経過観察' ? 1 : 2; };
+    const rk = t => { const st = (treatState(t) || {}).st; return st === '治療中' ? 0 : st === '経過観察' ? 1 : hygStatus(t).some(x => x.left < 0) ? 2 : 3; };
     const d = rk(a) - rk(b); if(d) return d;
   }
   const isCalf = breedF === '哺乳中' || breedF === '育成';
@@ -1026,6 +1081,7 @@ function renderList(){
       <span class="muted">${esc(a.sex)}・${esc(isNursing(t) && a.birth ? `${todayN() - dn(a.birth)}日齢` : ageText(a.birth))}${due}</span></div>
       ${pedRow}
       ${readyLine(t)}
+      ${hygLine(t)}
       ${isF && hasRepro(t) ? stageBar(t) : ''}
       <div>${st}</div>${isNursing(t) ? weanBar(t) : ''}</div>`;
   };
@@ -1350,6 +1406,12 @@ const ACT = {
   allList: () => { breedF = '全て'; show('list'); },
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
+  hygDone: k => {
+    if(!cur) return;
+    db.events.push({id: uid(), tag: cur, type: 'hyg', date: todayS(), data: {k}, createdAt: new Date().toISOString()});
+    save(); openTag(cur);
+    toast('衛生管理を記録しました');
+  },
   repeatTreat: () => {
     if(!cur) return;
     const prev = evType(cur,'inj')[0];
