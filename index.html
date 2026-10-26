@@ -49,6 +49,7 @@
   .sg.cur{background:#2a5b8c;color:#fff;font-weight:bold}
   .sg.calm{background:#6fae8c;color:#fff;font-weight:bold}
   .tbox{border:3px solid #c0392b;background:#fdecea;color:#7a1f1f;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
+  .htoday{border:3px solid #ea580c;background:#ffedd5;color:#7c2d12;border-radius:8px;padding:8px 10px;margin:6px 0;font-weight:bold;font-size:16px}
   .hbox{border:3px solid #b91c1c;background:#fde8e8;color:#7f1d1d;border-radius:8px;padding:6px 10px;margin:6px 0;font-weight:bold}
   .obox{border:3px solid #d97706;background:#fff4e0;color:#7a4300;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
   .tiles{display:flex;gap:8px;margin-bottom:12px}
@@ -244,7 +245,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
-let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural';
+let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null;
 const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
@@ -480,14 +481,22 @@ function hygLine(t){
   const p = hygStatus(t); if(!p.length) return '';
   const n = p[0];
   if(n.left < 0) return `<div class="hbox">⚠ 衛生管理 期限超過：${esc(n.h.label)}（${-n.left}日過ぎ）</div>`;
+  if(n.left === 0) return `<div class="htoday">📌 今日：${esc(n.h.label)}の予定日</div>`;
   if(n.left > 14) return '';
   return `<div class="muted" style="font-size:13px;margin-top:4px">次の衛生管理：${esc(n.h.label)}（あと${n.left}日）</div>`;
 }
+// 入力画面：今日・期限超過は1タップで実施。あと○日の予定は、確認してから実施
 function hygActs(t){
   const p = hygStatus(t).filter(x => x.left <= 14);
   if(!p.length) return '';
   return `<div class="card" style="padding:8px 10px;margin:8px 0"><div style="font-weight:bold;margin-bottom:6px">衛生管理</div>` +
-    p.map(x => `<div class="row" style="margin:6px 0;gap:8px;flex-wrap:wrap"><span class="${x.left < 0 ? 'hbox' : ''}" style="flex:1;${x.left < 0 ? '' : 'font-weight:bold'}">${esc(x.h.label)}　${x.left < 0 ? '期限超過' + (-x.left) + '日' : x.left === 0 ? '今日' : 'あと' + x.left + '日'}</span><button class="btn btnsmall" data-act="hygDone" data-arg="${x.h.k}">実施した</button></div>`).join('') + `</div>`;
+    p.map(x => {
+      const k = x.h.k;
+      if(x.left < 0) return `<div class="hbox" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>期限超過${-x.left}日：${esc(x.h.label)}</span><button class="btn btnsmall" data-act="hygDone" data-arg="${k}">実施した</button></div>`;
+      if(x.left === 0) return `<div class="htoday" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>📌 今日：${esc(x.h.label)}</span><button class="btn btnsmall" data-act="hygDone" data-arg="${k}">実施した</button></div>`;
+      if(hygAsk === k) return `<div style="border:2px solid #888;border-radius:8px;padding:8px;margin:6px 0"><div style="font-weight:bold">本当に実施しますか？</div><div class="muted" style="margin:4px 0">${esc(x.h.label)}は予定日まであと${x.left}日です。</div><div class="row" style="gap:8px"><button class="btn" data-act="hygDone" data-arg="${k}">はい、実施しました</button><button class="btn sub" data-act="hygCancel">やめる</button></div></div>`;
+      return `<div class="row" style="margin:6px 0;gap:8px;flex-wrap:wrap"><span style="flex:1;font-weight:bold">${esc(x.h.label)}　あと${x.left}日</span><button class="btn btnsmall sub" data-act="hygAsk" data-arg="${k}">実施した</button></div>`;
+    }).join('') + `</div>`;
 }
 // 種付け（繁殖供用）の目安：和牛は13〜15ヶ月・体重300kg・体高120cm以上、ホルスタインは13ヶ月・体重350kg・体高125cm以上
 const BREED_MIN = {'和牛':{h:120,kg:300}, 'ホルスタイン':{h:125,kg:350}};
@@ -1406,8 +1415,11 @@ const ACT = {
   allList: () => { breedF = '全て'; show('list'); },
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
+  hygAsk: k => { hygAsk = k; openTag(cur); },
+  hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
     if(!cur) return;
+    hygAsk = null;
     db.events.push({id: uid(), tag: cur, type: 'hyg', date: todayS(), data: {k}, createdAt: new Date().toISOString()});
     save(); openTag(cur);
     toast('衛生管理を記録しました');
