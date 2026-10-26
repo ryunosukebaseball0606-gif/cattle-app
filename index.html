@@ -565,10 +565,6 @@ function kindOf(text){
   if(/衛生|トライキル|鉄剤|臍|初乳|去勢/.test(text)) return 'hyg';
   return '';
 }
-// 「消す」を押したアラートは、同じ内容（日数の違いは無視）の間は出さない
-function alertKey(x){ return `${x.tag}|${x.text.replace(/\d+/g, '#')}`; }
-function dismissedMap(){ try{ return JSON.parse(localStorage.getItem('cattle-dismissed') || '{}'); }catch(e){ return {}; } }
-function isDismissed(x){ return !!dismissedMap()[alertKey(x)]; }
 function alerts(){
   const S = db.settings, T = todayN(), out = [];
   for(const tag of Object.keys(db.animals)){
@@ -634,7 +630,7 @@ function alerts(){
       if(left <= S.warnDays) push(left, left <= 0 ? `${sm}ヶ月齢：出荷か自家保留かを必ず決めてください` : `出荷・保留の判定まで${left}日`, left <= 0 ? 'bad' : 'info');
     }
   }
-  return out.sort((x,y) => x.left - y.left).filter(x => !isDismissed(x)).map(x => ({...x, kind: kindOf(x.text)}));
+  return out.sort((x,y) => x.left - y.left).map(x => ({...x, kind: kindOf(x.text)}));
 }
 function updateBadge(){ const n = alerts().length; const el = $('alBadge'); if(el) el.textContent = n ? `(${n})` : ''; }
 
@@ -1142,8 +1138,7 @@ function renderAlerts(){
     <div class="item" data-tag="${esc(x.tag)}" data-kind="${esc(x.kind)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
       <div><span class="badge b-${x.c}">${esc(x.text)}</span></div>
-      <div class="row" style="margin-top:6px;gap:8px;justify-content:space-between"><span class="muted" style="font-size:13px">タップで入力へ</span>
-        <button class="btn btnsmall sub" data-act="dismissAlert" data-arg="${encodeURIComponent(alertKey(x))}">このアラートを消す</button></div>
+      <div class="muted" style="font-size:13px;margin-top:6px">タップして入力へ。実行すると、アラートは消えます。</div>
     </div>`).join('') : '<div class="muted">今、対応が必要な項目はありません</div>';
 }
 
@@ -1433,11 +1428,6 @@ const ACT = {
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
   hygAsk: k => { hygAsk = k; openTag(cur); },
-  dismissAlert: k => {
-    const m = dismissedMap(); m[decodeURIComponent(k)] = 1;
-    try{ localStorage.setItem('cattle-dismissed', JSON.stringify(m)); }catch(e){}
-    renderAlerts(); updateBadge(); toast('アラートを消しました');
-  },
   hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
     if(!cur) return;
