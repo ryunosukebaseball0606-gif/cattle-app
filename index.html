@@ -563,6 +563,11 @@ function kindOf(text){
   if(/出荷か自家保留|出荷・保留/.test(text)) return 'decide';
   if(/治療|再発/.test(text)) return 'treat';
   if(/衛生|トライキル|鉄剤|臍|初乳|去勢/.test(text)) return 'hyg';
+  if(/鑑定/.test(text)) return 'preg';
+  if(/分娩|出産/.test(text)) return 'calving';
+  if(/授精|受精|移植/.test(text)) return 'ai';
+  if(/発情/.test(text)) return 'estrus';
+  if(/離乳/.test(text)) return 'wean';
   return '';
 }
 function alerts(){
@@ -784,7 +789,16 @@ function openTag(tag){
     extra += `<div class="muted">予定の父：${r.base ? esc(r.base.data.sire) : '不明'}（${esc(sl)}）</div>`;
   }
   const mother = a.mother ? `<span class="lnk" data-tag="${esc(a.mother)}">母 ${esc(a.mother)}</span>` : '';
-  const focusTop = alertFocus === 'decide' ? `<div class="card" style="border:3px solid #2563eb;background:#eff6ff;margin-bottom:10px"><div style="font-size:18px;font-weight:bold;margin-bottom:8px">出荷か自家保留かを決めてください</div><div class="row" style="gap:10px"><button class="btn" data-act="pick" data-arg="ship" style="font-size:18px;padding:14px">出荷（セリ）</button><button class="btn" data-act="pick" data-arg="retain" style="font-size:18px;padding:14px">自家保留</button></div></div>` : '';
+  // この牛のアラート＝今やるべきこと。一番上に、入力しやすい形で出す
+  const mine = alerts().filter(x => x.tag === tag);
+  const hasKind = k => mine.some(x => x.kind === k);
+  const focusTop = mine.length ? `<div class="card" style="border:3px solid #2563eb;background:#eff6ff;margin-bottom:10px">
+    <div style="font-size:15px;font-weight:bold;color:#1e3a8a;margin-bottom:6px">今やること</div>` +
+    mine.map(x => {
+      const act = x.kind === 'decide' ? `<div class="row" style="gap:10px"><button class="btn" data-act="pick" data-arg="ship" style="font-size:18px;padding:14px">出荷（セリ）</button><button class="btn" data-act="pick" data-arg="retain" style="font-size:18px;padding:14px">自家保留</button></div>`
+        : x.kind === 'treat' ? '' : x.kind === 'hyg' ? '' : (TYPES[x.kind] ? `<div class="row"><button class="btn" data-act="pick" data-arg="${x.kind}" style="font-size:17px;padding:12px">${esc(TYPES[x.kind].label)}を記録</button></div>` : '');
+      return `<div style="margin:6px 0"><div style="font-size:16px;font-weight:bold">${esc(x.text)}</div>${act}</div>`;
+    }).join('') + `${hasKind('treat') ? treatActs(tag) : ''}${hasKind('hyg') ? hygActs(tag) : ''}</div>` : '';
   $('cowHead').className = 'card ' + (isF ? 'female' : 'male');
   $('cowHead').innerHTML = `
     ${focusTop}
@@ -793,8 +807,8 @@ function openTag(tag){
     <div class="muted">識別番号 ${esc(tag)}</div>
     <div>${st}</div>
     ${treatBox(tag)}
-    ${treatActs(tag)}
-    ${hygActs(tag)}
+    ${hasKind('treat') ? '' : treatActs(tag)}
+    ${hasKind('hyg') ? '' : hygActs(tag)}
     ${isNursing(tag) ? weanBar(tag) : ''}
     <div class="muted">${esc(breedLabel(a))} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
     <div class="muted">${mother}</div>
@@ -1138,7 +1152,6 @@ function renderAlerts(){
     <div class="item" data-tag="${esc(x.tag)}" data-kind="${esc(x.kind)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
       <div><span class="badge b-${x.c}">${esc(x.text)}</span></div>
-      ${x.kind === 'decide' ? `<div class="row" style="gap:10px;margin-top:8px"><button class="btn" data-act="decideGo" data-arg="${esc(x.tag)}|ship" style="font-size:17px;padding:12px">出荷（セリ）</button><button class="btn" data-act="decideGo" data-arg="${esc(x.tag)}|retain" style="font-size:17px;padding:12px">自家保留</button></div>` : ''}
     </div>`).join('') : '<div class="muted">今、対応が必要な項目はありません</div>';
 }
 
@@ -1428,10 +1441,6 @@ const ACT = {
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
   hygAsk: k => { hygAsk = k; openTag(cur); },
-  decideGo: arg => {
-    const i = arg.lastIndexOf('|'), tag = arg.slice(0, i), kind = arg.slice(i + 1);
-    cur = null; show('input'); openTag(tag); ACT.pick(kind);
-  },
   hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
     if(!cur) return;
@@ -1539,12 +1548,7 @@ document.addEventListener('click', e => {
   if(jump){ document.getElementById(jump.dataset.jump)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
   const t = e.target.closest('[data-tag]');
   if(t){
-    if('kind' in t.dataset) alertFocus = t.dataset.kind || null;
     show('input'); openTag(t.dataset.tag);
-    if(alertFocus === 'treat' || alertFocus === 'hyg'){
-      const id = alertFocus === 'treat' ? 'actTreat' : 'actHyg';
-      setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth', block:'center'}), 60);
-    }
   }
 });
 
