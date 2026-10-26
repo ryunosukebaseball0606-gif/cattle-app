@@ -893,6 +893,36 @@ function delAnimal(tag){
 
 /* ---------- 一覧・アラート ---------- */
 const BREED_COLOR = {'和牛':'#111827','ホルスタイン':'#ea580c','F1':'#9ca3af','その他':'#ffffff'};
+// 状態の絞り込み：画面（哺乳・育成・和牛/ホルスタインの繁殖）ごとに、必要なものだけ出す
+function nursePhase(t){
+  const a = db.animals[t] || {};
+  if(!a.birth) return '';
+  const wd = dn(addMonths(a.birth, db.settings.weanM[a.breed] ?? 2)), T = todayN();
+  return T < wd - 14 ? '通常哺乳' : T < wd - 7 ? '減乳期間①' : T < wd ? '減乳期間②' : '離乳';
+}
+const CHIP = {
+  '全て': () => true,
+  '治療中': t => !!activeSick(t),
+  '通常哺乳': t => isNursing(t) && nursePhase(t) === '通常哺乳',
+  '減乳期間①': t => isNursing(t) && nursePhase(t) === '減乳期間①',
+  '減乳期間②': t => isNursing(t) && nursePhase(t) === '減乳期間②',
+  '未受胎': t => isBreedingCow(t) && stageOf(t).idx <= 1,
+  '鑑定待ち': t => isBreedingCow(t) && stageOf(t).idx === 2,
+  '妊娠中': t => isBreedingCow(t) && stageOf(t).idx === 3,
+  '出産直前': t => statuses(t).some(s => s.t === '出産直前'),
+  '出産予定超過': t => statuses(t).some(s => s.t === '出産予定超過'),
+  '出荷・保留未決定': t => statuses(t).some(s => s.t === '出荷・保留の判定（未決定）'),
+};
+function chipsFor(){
+  if(breedF === '哺乳中') return ['全て','治療中','通常哺乳','減乳期間①','減乳期間②'];
+  if(breedF === '育成') return ['全て','治療中','出荷・保留未決定'];
+  if(breedF === '和牛') return ['全て','未受胎','鑑定待ち','妊娠中','出産直前','出産予定超過','治療中','出荷・保留未決定'];
+  if(breedF === 'ホルスタイン') return ['全て','未受胎','鑑定待ち','妊娠中','出産直前','出産予定超過','治療中'];
+  return FILTERS;
+}
+function chipTest(f, t){
+  return (CHIP[f] || (() => statuses(t).some(s => s.t === f)))(t);
+}
 // 哺乳・育成の絞り込み（育成は品種で和牛／ホルスタインを分ける）
 function matchBreedF(t){
   const a = db.animals[t] || {};
@@ -912,12 +942,14 @@ function renderList(){
   saveView();
   const q = $('search').value.trim();
   $('breedChips').innerHTML = breedChipsHTML();
-  $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
+  const chipList = chipsFor();
+  if(!chipList.includes(filterSt)) filterSt = '全て';
+  $('chips').innerHTML = chipList.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
   const outFilter = ['出荷済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
     .filter(t => (showOut || outFilter || !isOut(t)))
     .filter(t => breedF === '全て' || matchBreedF(t))
-    .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
+    .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || chipTest(filterSt, t)))
     .sort(sortCmp);
   const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '出荷・死亡の牛も表示'}</button>`;
   const listItem = t => {
