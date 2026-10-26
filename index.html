@@ -93,7 +93,8 @@
   <button data-act="allList" data-arg="list">個体一覧</button>
   <button data-act="breedTab" data-arg="和牛" data-breed="和牛" data-hide-for="子牛係" style="font-size:13px">和牛</button>
   <button data-act="breedTab" data-arg="ホルスタイン" data-breed="ホルスタイン" data-hide-for="子牛係" style="font-size:12px">ホルスタイン</button>
-  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" data-hide-for="繁殖係" style="font-size:12px">子牛・育成</button>
+  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" data-hide-for="繁殖係" style="font-size:12px">哺乳</button>
+  <button data-act="breedTab" data-arg="育成" data-breed="育成" data-hide-for="繁殖係" style="font-size:12px">育成</button>
   <button data-act="newReg" data-arg="reg">登録</button>
   <button data-act="show" data-arg="set">設定</button>
 </nav>
@@ -239,7 +240,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
-let role = '全体', curView = 'input';
+let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural';
 const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
@@ -251,12 +252,12 @@ function roleTag(t){
   return true;
 }
 function saveView(){
-  try{ localStorage.setItem('cattle-lastview', JSON.stringify({view: curView, breedF, filterSt, role})); }catch(e){}
+  try{ localStorage.setItem('cattle-lastview', JSON.stringify({view: curView, breedF, filterSt, role, rearF, sortMode})); }catch(e){}
 }
 function loadView(){
   try{
     const v = JSON.parse(localStorage.getItem('cattle-lastview') || 'null');
-    if(v){ role = ROLE_TYPES[v.role] || v.role === '全体' ? v.role : '全体'; breedF = v.breedF || '全て'; filterSt = v.filterSt || '全て'; return v.view || 'input'; }
+    if(v){ role = ROLE_TYPES[v.role] || v.role === '全体' ? v.role : '全体'; breedF = v.breedF || '全て'; filterSt = v.filterSt || '全て'; rearF = v.rearF || '全て'; sortMode = v.sortMode || 'natural'; return v.view || 'input'; }
   }catch(e){}
   return 'input';
 }
@@ -892,6 +893,21 @@ function delAnimal(tag){
 
 /* ---------- 一覧・アラート ---------- */
 const BREED_COLOR = {'和牛':'#111827','ホルスタイン':'#ea580c','F1':'#9ca3af','その他':'#ffffff'};
+// 哺乳・育成の絞り込み（育成は品種で和牛／ホルスタインを分ける）
+function matchBreedF(t){
+  const a = db.animals[t] || {};
+  if(breedF === '哺乳中') return isCalfRole(t) && isNursing(t);
+  if(breedF === '育成') return isCalfRole(t) && !isNursing(t) && (rearF === '全て' || a.breed === rearF);
+  return a.breed === breedF;
+}
+// 並べ替え：番号順／月齢が若い順／月齢が高い順（哺乳・育成のとき）
+function sortCmp(a, b){
+  const isCalf = breedF === '哺乳中' || breedF === '育成';
+  const k = t => (db.animals[t] || {}).birth || '';
+  if(isCalf && sortMode === 'young') return k(b).localeCompare(k(a)) || natSort(a, b);
+  if(isCalf && sortMode === 'old') return (k(a) || '9').localeCompare(k(b) || '9') || natSort(a, b);
+  return natSort(a, b);
+}
 function renderList(){
   saveView();
   const q = $('search').value.trim();
@@ -900,9 +916,9 @@ function renderList(){
   const outFilter = ['出荷済','死亡'].includes(filterSt);
   const tags = Object.keys(db.animals)
     .filter(t => (showOut || outFilter || !isOut(t)))
-    .filter(t => breedF === '全て' || (breedF === '哺乳中' ? isCalfRole(t) : db.animals[t].breed === breedF))
+    .filter(t => breedF === '全て' || matchBreedF(t))
     .filter(t => (!q || findTags(q).includes(t)) && (filterSt === '全て' || statuses(t).some(s => s.t === filterSt)))
-    .sort(natSort);
+    .sort(sortCmp);
   const toggle = `<button class="btn sub" data-act="toggleOut" style="margin-bottom:10px">${showOut ? '在籍の牛だけ表示' : '出荷・死亡の牛も表示'}</button>`;
   const listItem = t => {
     const a = db.animals[t], r = repro(t);
@@ -941,7 +957,14 @@ function renderList(){
   } else {
     rows = tags.length ? tags.map(listItem).join('') : '<div class="muted">該当する個体がありません</div>';
   }
-  $('listBox').innerHTML = head + toggle + rows;
+  let tool = '';
+  if(breedF === '哺乳中' || breedF === '育成'){
+    const opt = (v, l) => `<option value="${v}" ${sortMode === v ? 'selected' : ''}>${l}</option>`;
+    tool = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">` +
+      (breedF === '育成' ? ['全て','和牛','ホルスタイン'].map(b => `<button class="chip ${rearF===b?'on':''}" data-act="rearf" data-arg="${b}">${b}</button>`).join('') : '') +
+      `<select id="sortSel" style="flex:1;min-width:160px;font-size:15px">${opt('natural','番号順')}${opt('young','月齢が若い順')}${opt('old','月齢が高い順')}</select></div>`;
+  }
+  $('listBox').innerHTML = head + tool + toggle + rows;
 
 }
 function renderAlerts(){
@@ -1234,6 +1257,7 @@ const ACT = {
   allList: () => { breedF = '全て'; show('list'); },
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
+  rearf: v => { rearF = v; renderList(); },
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
   confirmMaster: m => {
@@ -1321,6 +1345,7 @@ document.addEventListener('click', e => {
 });
 
 document.addEventListener('change', e => {
+  if(e.target.id === 'sortSel'){ sortMode = e.target.value; renderList(); return; }
   if(e.target.id === 'f_assist'){ document.querySelectorAll('.live').forEach(r => r.classList.toggle('hidden', e.target.value === '死産')); }
   if(e.target.id && e.target.id.startsWith('f_')){
     const k = e.target.id.slice(2);
