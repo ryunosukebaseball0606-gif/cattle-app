@@ -1417,7 +1417,7 @@ const ACT = {
   pick: k => {
     selType = k; renderForm(); markType(); placeForm(k);
     toast(`「${TYPES[k] ? TYPES[k].label : k}」を選びました。下で入力してください`);
-    setTimeout(() => $('entryForm').scrollIntoView({behavior:'smooth', block:'start'}), 60);
+    setTimeout(() => { const ef = $('entryForm'); ef.style.scrollMarginTop = '110px'; ef.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
   },
   record: () => recordEvent(),
   delEv: id => { db.events = db.events.filter(e => e.id !== id); save(); openTag(cur); toast('削除しました'); },
