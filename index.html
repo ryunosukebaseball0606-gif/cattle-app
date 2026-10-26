@@ -82,13 +82,18 @@
 </head>
 <body>
 <header>牛管理（個体識別番号基準）</header>
+<div id="roleBar" style="display:flex;gap:6px;padding:8px 10px;background:#fff;border-bottom:1px solid var(--line)">
+  <button data-act="setRole" data-arg="子牛係" class="chip" style="flex:1;font-size:15px;padding:8px 0">子牛係</button>
+  <button data-act="setRole" data-arg="繁殖係" class="chip" style="flex:1;font-size:15px;padding:8px 0">繁殖係</button>
+  <button data-act="setRole" data-arg="全体" class="chip" style="flex:1;font-size:15px;padding:8px 0">全体</button>
+</div>
 <nav>
   <button data-act="show" data-arg="input" class="on">入力</button>
   <button data-act="show" data-arg="alerts">アラート<span id="alBadge"></span></button>
   <button data-act="allList" data-arg="list">個体一覧</button>
-  <button data-act="breedTab" data-arg="和牛" data-breed="和牛" style="font-size:13px">和牛</button>
-  <button data-act="breedTab" data-arg="ホルスタイン" data-breed="ホルスタイン" style="font-size:12px">ホルスタイン</button>
-  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" style="font-size:12px">哺乳子牛</button>
+  <button data-act="breedTab" data-arg="和牛" data-breed="和牛" data-hide-for="子牛係" style="font-size:13px">和牛</button>
+  <button data-act="breedTab" data-arg="ホルスタイン" data-breed="ホルスタイン" data-hide-for="子牛係" style="font-size:12px">ホルスタイン</button>
+  <button data-act="breedTab" data-arg="哺乳中" data-breed="哺乳中" data-hide-for="繁殖係" style="font-size:12px">哺乳子牛</button>
   <button data-act="newReg" data-arg="reg">登録</button>
   <button data-act="show" data-arg="set">設定</button>
 </nav>
@@ -230,6 +235,31 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
+// 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
+let role = '全体', curView = 'input';
+const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move'], '繁殖係':['estrus','ai','preg','calving']};
+const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
+function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
+function roleTag(t){
+  if(role === '子牛係') return isNursing(t) || !!activeSick(t);
+  if(role === '繁殖係') return (db.animals[t] || {}).sex === '雌' && hasRepro(t);
+  return true;
+}
+function saveView(){
+  try{ localStorage.setItem('cattle-lastview', JSON.stringify({view: curView, breedF, filterSt, role})); }catch(e){}
+}
+function loadView(){
+  try{
+    const v = JSON.parse(localStorage.getItem('cattle-lastview') || 'null');
+    if(v){ role = ROLE_TYPES[v.role] || v.role === '全体' ? v.role : '全体'; breedF = v.breedF || '全て'; filterSt = v.filterSt || '全て'; return v.view || 'input'; }
+  }catch(e){}
+  return 'input';
+}
+function setRole(r){
+  role = r; breedF = ROLE_DEFAULT[r] || '全て'; filterSt = '全て';
+  if(selType && !allowedType(cur, selType)){ selType = null; }
+  show('list');
+}
 // 哺乳中：離乳前の子牛（品種を問わない）
 function isNursing(t){
   const a = db.animals[t] || {}, age = ageM(a.birth);
@@ -546,7 +576,10 @@ function pedigreeHTML(tag){
 
 /* ---------- 表示 ---------- */
 function show(v){
+  curView = v;
   ['input','alerts','list','reg','set'].forEach(x => $('v-'+x).classList.toggle('hidden', x !== v));
+  document.querySelectorAll('#roleBar [data-arg]').forEach(b => b.classList.toggle('on', b.dataset.arg === role));
+  document.querySelectorAll('nav [data-hide-for]').forEach(b => b.classList.toggle('hidden', b.dataset.hideFor === role));
   document.querySelectorAll('nav button').forEach(b => {
     const on = b.dataset.breed ? (v === 'list' && breedF === b.dataset.breed)
       : (b.dataset.arg === v && !(v === 'list' && breedF !== '全て'));
@@ -556,6 +589,7 @@ function show(v){
   if(v === 'alerts') renderAlerts();
   if(v === 'set') renderSettings();
   updateBadge();
+  saveView();
 }
 function openTag(tag){
   tag = (tag ?? $('tagIn').value).trim();
@@ -696,6 +730,7 @@ function placeForm(k){
 }
 function allowedType(tag, k){
   const a = db.animals[tag]; if(!a) return false;
+  if(!roleAllows(k)) return false;
   if(REPRO_TYPES.includes(k)){
     if(a.sex !== '雌') return false;
     if(a.birth && (ageM(a.birth) ?? 0) < (db.settings.reproM[a.breed] ?? 12)) return false;
@@ -815,6 +850,7 @@ function delAnimal(tag){
 /* ---------- 一覧・アラート ---------- */
 const BREED_COLOR = {'和牛':'#111827','ホルスタイン':'#ea580c','F1':'#9ca3af','その他':'#ffffff'};
 function renderList(){
+  saveView();
   const q = $('search').value.trim();
   $('breedChips').innerHTML = breedChipsHTML();
   $('chips').innerHTML = FILTERS.map(f => `<button class="chip ${filterSt===f?'on':''}" data-act="filter" data-arg="${f}">${f}</button>`).join('');
@@ -867,7 +903,7 @@ function renderList(){
 function renderAlerts(){
   $('breedChipsA').innerHTML = breedChipsHTML();
   const bf = breedF === '哺乳中' ? '全て' : breedF;
-  const list = alerts().filter(x => bf === '全て' || (db.animals[x.tag] || {}).breed === bf);
+  const list = alerts().filter(x => roleTag(x.tag) && (bf === '全て' || (db.animals[x.tag] || {}).breed === bf));
   $('alertBox').innerHTML = list.length ? list.map(x => `
     <div class="item" data-tag="${esc(x.tag)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
@@ -1153,6 +1189,7 @@ const ACT = {
   },
   allList: () => { breedF = '全て'; show('list'); },
   breedTab: b => { breedF = b; show('list'); },
+  setRole: r => setRole(r),
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
   confirmMaster: m => {
@@ -1283,7 +1320,7 @@ document.addEventListener('change', e => {
 });
 
 renderReg(null);
-show('input');
+show(loadView());
 pullSync();
 </script>
 </body>
