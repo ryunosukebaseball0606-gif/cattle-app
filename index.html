@@ -193,7 +193,9 @@ const TYPES = {
   sick:    {label:'診療', f:[{k:'disease', t:'multi', m:'disease', label:'病名・症状（複数選べます）'}]},
   vacc:    {label:'ワクチン', f:[{k:'vaccine', t:'master', m:'vaccine', label:'ワクチン'}]},
   inj:     {label:'注射', f:[{k:'drug', t:'master', m:'drug', label:'注射薬'}]},
-  ship:    {label:'出荷', f:[{k:'seri', t:'num', label:'セリ番号'}, {k:'weight', t:'num', label:'体重(kg)', onlyBreed:'和牛'}, {k:'price', t:'num', label:'価格(千円)'}]},
+  ship_plan: {label:'出荷予定', f:[{k:'sale_date', t:'date', label:'セリ日'}]},
+  hold_plan: {label:'保留予定', f:[]},
+  ship:    {label:'出荷（セリ結果）', f:[{k:'seri', t:'num', label:'セリ番号'}, {k:'weight', t:'num', label:'体重(kg)', onlyBreed:'和牛'}, {k:'price', t:'num', label:'価格(千円)'}]},
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
   cured:   {label:'治癒', f:[]},
@@ -248,7 +250,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
 let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null, backToAlerts = false;
-const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure','ship','retain'], '繁殖係':['estrus','ai','preg','calving','measure']};
+const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure','ship_plan','hold_plan','ship','retain'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
 function roleTag(t){
@@ -434,13 +436,16 @@ function statuses(tag){
   const out = [];
   const age = ageM(a.birth);
   if(last(tag,'retain')) out.push({t:'自家保留', c:'info'});
+  const spp = shipPending(tag);
+  if(spp) out.push({t:`出荷予定${spp.data && spp.data.sale_date ? '（セリ ' + spp.data.sale_date.slice(5) + '）' : ''}`, c:'info'});
+  if(last(tag,'hold_plan') && !last(tag,'retain')) out.push({t:'保留予定', c:'info'});
   if(age !== null){
     const weanM = S.weanM[a.breed] ?? 2, shipM = S.shipM[a.breed] ?? 10;
     const wean = last(tag,'wean');
     if(wean) out.push({t:'離乳済', c:'mute'});
     else if(age >= weanM) out.push({t:'離乳時期', c:'warn'});
     else out.push({t:'哺乳中', c:'info'});
-    if(a.breed === '和牛' && age >= shipM && !last(tag,'retain') && !hasRepro(tag)) out.push({t:'出荷・保留の判定（未決定）', c:'bad'});
+    if(a.breed === '和牛' && age >= shipM && !isDecided(tag) && !hasRepro(tag)) out.push({t:'出荷・保留の判定（未決定）', c:'bad'});
     else if(wean) out.push({t:'育成中', c:'info'});
   }
   return out;
@@ -499,6 +504,15 @@ function hygActs(t){
       if(hygAsk === k) return `<div style="border:2px solid #888;border-radius:8px;padding:8px;margin:6px 0"><div style="font-weight:bold">本当に実施しますか？</div><div class="muted" style="margin:4px 0">${esc(x.h.label)}は予定日まであと${x.left}日です。</div><div class="row" style="gap:8px"><button class="btn" data-act="hygDone" data-arg="${k}">はい、実施しました</button><button class="btn sub" data-act="hygCancel">やめる</button></div></div>`;
       return `<div class="row" style="margin:6px 0;gap:8px;flex-wrap:wrap"><span style="flex:1;font-weight:bold">${esc(x.h.label)}　あと${x.left}日</span><button class="btn btnsmall sub" data-act="hygAsk" data-arg="${k}">実施した</button></div>`;
     }).join('') + `</div>`;
+}
+// 出荷予定があって、まだセリ結果が入っていないもの
+function shipPending(t){
+  const sp = last(t,'ship_plan'); if(!sp) return null;
+  return evType(t,'ship').some(e => e.date >= sp.date) ? null : sp;
+}
+// 出荷・保留の判断が済んでいるか（予定・結果を含む）
+function isDecided(t){
+  return !!(last(t,'retain') || last(t,'ship_plan') || last(t,'hold_plan') || last(t,'ship'));
 }
 // 種付け（繁殖供用）の目安：和牛は13〜15ヶ月・体重300kg・体高120cm以上、ホルスタインは13ヶ月・体重350kg・体高125cm以上
 const BREED_MIN = {'和牛':{h:120,kg:300}, 'ホルスタイン':{h:125,kg:350}};
@@ -562,6 +576,7 @@ function plannedAI(tag){
 }
 // アラートの種類：どの入力を開くか決める
 function kindOf(text){
+  if(/セリ日/.test(text)) return 'ship';
   if(/出荷か自家保留|出荷・保留/.test(text)) return 'decide';
   if(/治療|再発/.test(text)) return 'treat';
   if(/衛生|トライキル|鉄剤|臍|初乳|去勢/.test(text)) return 'hyg';
@@ -631,7 +646,12 @@ function alerts(){
       if(left <= S.warnDays && left > -30)
         push(left, left < 0 ? '離乳未記録（予定超過）' : `離乳まで${left}日`, left < 0 ? 'warn' : 'info');
     }
-    if(a.birth && a.breed === '和牛' && !hasRepro(tag) && !last(tag,'retain')){
+    const spd = shipPending(tag);
+    if(spd && spd.data && spd.data.sale_date){
+      const left = dn(spd.data.sale_date) - T;
+      if(left <= 1) push(left, left < 0 ? `セリ日超過${-left}日：出荷結果を入力` : left === 0 ? '今日はセリ日：出荷結果を入力' : '明日はセリ日：出荷結果を入力', left < 0 ? 'bad' : left === 0 ? 'warn' : 'info');
+    }
+    if(a.birth && a.breed === '和牛' && !hasRepro(tag) && !isDecided(tag)){
       const sm = S.shipM[a.breed] ?? 10;
       const left = dn(addMonths(a.birth, sm)) - T;
       if(left <= S.warnDays) push(left, left <= 0 ? `${sm}ヶ月齢：出荷か自家保留かを必ず決めてください` : `出荷・保留の判定まで${left}日`, left <= 0 ? 'bad' : 'info');
@@ -797,7 +817,7 @@ function openTag(tag){
   const focusTop = mine.length ? `<div class="card" style="border:3px solid #2563eb;background:#eff6ff;margin-bottom:10px">
     <div style="font-size:15px;font-weight:bold;color:#1e3a8a;margin-bottom:6px">今やること</div>` +
     mine.map(x => {
-      const act = x.kind === 'decide' ? `<div class="row" style="gap:10px"><button class="btn" data-act="pick" data-arg="ship" style="font-size:18px;padding:14px">出荷（セリ）</button><button class="btn" data-act="pick" data-arg="retain" style="font-size:18px;padding:14px">自家保留</button></div>`
+      const act = x.kind === 'decide' ? `<div class="row" style="gap:10px"><button class="btn" data-act="pick" data-arg="ship_plan" style="font-size:18px;padding:14px">出荷予定</button><button class="btn" data-act="pick" data-arg="hold_plan" style="font-size:18px;padding:14px">保留予定</button></div>`
         : x.kind === 'treat' ? '' : x.kind === 'hyg' ? '' : (TYPES[x.kind] ? `<div class="row"><button class="btn" data-act="pick" data-arg="${x.kind}" style="font-size:17px;padding:12px">${esc(TYPES[x.kind].label)}を記録</button></div>` : '');
       return `<div style="margin:6px 0"><div style="font-size:16px;font-weight:bold">${esc(x.text)}</div>${act}</div>`;
     }).join('') + `${hasKind('treat') ? treatActs(tag) : ''}${hasKind('hyg') ? hygActs(tag) : ''}</div>` : '';
@@ -820,7 +840,7 @@ function openTag(tag){
   $('panel').classList.remove('hidden');
   // 雄には雌専用の項目を出さない（押せない表示）
   $('typeGrid').after($('entryForm'));
-  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES.filter(k => !['vacc','hyg'].includes(k))], ['その他', ['move','weight','measure','wean','ship','retain','dead','intro']]];
+  const groupsDef = [['繁殖', REPRO_TYPES], ['健康・治療', HEALTH_TYPES.filter(k => !['vacc','hyg'].includes(k))], ['その他', ['move','weight','measure','wean','ship_plan','hold_plan','ship','retain','dead','intro']]];
   $('typeGrid').innerHTML = groupsDef.map(([title, keys]) => {
     const btns = keys.filter(k => TYPES[k] && allowedType(tag, k)).map(k => `<button data-act="pick" data-arg="${k}" class="${selType===k?'on':''}">${TYPES[k].label}</button>`).join('');
     return btns ? `<div class="muted" style="margin:8px 0 4px">${title}</div><div class="grid">${btns}</div>` : '';
@@ -891,6 +911,7 @@ function fieldHTML(f){
   }
   if(f.t === 'id') return `<input id="${id}" inputmode="numeric" maxlength="10" placeholder="10桁の数字">`;
   if(f.t === 'text') return `<input id="${id}" placeholder="例 さくら子">`;
+  if(f.t === 'date') return `<input id="${id}" type="date">`;
   if(f.t === 'num') return `<input id="${id}" type="number" step="0.1" inputmode="decimal" placeholder="例 285">`;
 }
 function fieldsFor(k, a){
@@ -1123,6 +1144,8 @@ function renderList(){
       <div style="margin-top:4px"><span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
       <span class="muted">${esc(a.sex)}・${esc(isNursing(t) && a.birth ? `${todayN() - dn(a.birth)}日齢` : ageText(a.birth))}${due}</span></div>
       ${pedRow}
+      ${(() => { const sh = last(t,'ship'); if(!sh) return ''; const d = sh.data || {};
+        return `<div style="font-size:14px;margin-top:4px;font-weight:bold">出荷：${d.seri ? 'セリ' + esc(d.seri) + '　' : ''}${d.price ? esc(d.price) + '千円' : '価格未入力'}${a.breed === '和牛' && d.weight ? '　体重 ' + esc(d.weight) + 'kg' : ''}（${esc(sh.date)}）</div>`; })()}
       ${readyLine(t)}
       ${hygLine(t)}
       ${isF && hasRepro(t) ? stageBar(t) : ''}
