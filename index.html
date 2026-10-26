@@ -245,7 +245,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
-let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null;
+let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null;
 const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
@@ -489,7 +489,7 @@ function hygLine(t){
 function hygActs(t){
   const p = hygStatus(t).filter(x => x.left <= 14);
   if(!p.length) return '';
-  return `<div class="card" style="padding:8px 10px;margin:8px 0"><div style="font-weight:bold;margin-bottom:6px">衛生管理</div>` +
+  return `<div id="actHyg" class="card" style="padding:8px 10px;margin:8px 0"><div style="font-weight:bold;margin-bottom:6px">衛生管理</div>` +
     p.map(x => {
       const k = x.h.k;
       if(x.left < 0) return `<div class="hbox" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span>期限超過${-x.left}日：${esc(x.h.label)}</span><button class="btn btnsmall" data-act="hygDone" data-arg="${k}">実施した</button></div>`;
@@ -533,7 +533,7 @@ function readyLine(t){
 function treatActs(t){
   const r = treatState(t), hasInj = evType(t,'inj').length > 0;
   if(!r && !hasInj) return '';
-  return `<div class="row" style="margin:8px 0;gap:8px">` +
+  return `<div id="actTreat" class="row" style="margin:8px 0;gap:8px">` +
     (hasInj ? `<button class="btn" data-act="repeatTreat">前回と同じ処置を記録</button>` : '') +
     (r && r.st === '治療中' ? `<button class="btn sub" data-act="cureNow">治癒にする（7日間は経過観察）</button>` : '') +
     `</div>`;
@@ -558,6 +558,17 @@ function plannedAI(tag){
   if(evType(tag,'ai').some(x => x.date >= e.date)) return null;
   return e;
 }
+// アラートの種類：どの入力を開くか決める
+function kindOf(text){
+  if(/出荷か自家保留|出荷・保留/.test(text)) return 'decide';
+  if(/治療|再発/.test(text)) return 'treat';
+  if(/衛生|トライキル|鉄剤|臍|初乳|去勢/.test(text)) return 'hyg';
+  return '';
+}
+// 「消す」を押したアラートは、同じ内容（日数の違いは無視）の間は出さない
+function alertKey(x){ return `${x.tag}|${x.text.replace(/\d+/g, '#')}`; }
+function dismissedMap(){ try{ return JSON.parse(localStorage.getItem('cattle-dismissed') || '{}'); }catch(e){ return {}; } }
+function isDismissed(x){ return !!dismissedMap()[alertKey(x)]; }
 function alerts(){
   const S = db.settings, T = todayN(), out = [];
   for(const tag of Object.keys(db.animals)){
@@ -623,7 +634,7 @@ function alerts(){
       if(left <= S.warnDays) push(left, left <= 0 ? `${sm}ヶ月齢：出荷か自家保留かを必ず決めてください` : `出荷・保留の判定まで${left}日`, left <= 0 ? 'bad' : 'info');
     }
   }
-  return out.sort((x,y) => x.left - y.left);
+  return out.sort((x,y) => x.left - y.left).filter(x => !isDismissed(x)).map(x => ({...x, kind: kindOf(x.text)}));
 }
 function updateBadge(){ const n = alerts().length; const el = $('alBadge'); if(el) el.textContent = n ? `(${n})` : ''; }
 
@@ -728,6 +739,7 @@ function pedigreeHTML(tag){
 /* ---------- 表示 ---------- */
 function show(v){
   curView = v;
+  if(v !== 'input') alertFocus = null;
   ['input','alerts','list','reg','set'].forEach(x => $('v-'+x).classList.toggle('hidden', x !== v));
   document.querySelectorAll('#roleBar [data-arg]').forEach(b => b.classList.toggle('on', b.dataset.arg === role));
   document.querySelectorAll('nav [data-hide-for]').forEach(b => b.classList.toggle('hidden', b.dataset.hideFor === role));
@@ -776,8 +788,10 @@ function openTag(tag){
     extra += `<div class="muted">予定の父：${r.base ? esc(r.base.data.sire) : '不明'}（${esc(sl)}）</div>`;
   }
   const mother = a.mother ? `<span class="lnk" data-tag="${esc(a.mother)}">母 ${esc(a.mother)}</span>` : '';
+  const focusTop = alertFocus === 'decide' ? `<div class="card" style="border:3px solid #2563eb;background:#eff6ff;margin-bottom:10px"><div style="font-size:18px;font-weight:bold;margin-bottom:8px">出荷か自家保留かを決めてください</div><div class="row" style="gap:10px"><button class="btn" data-act="pick" data-arg="ship" style="font-size:18px;padding:14px">出荷（セリ）</button><button class="btn" data-act="pick" data-arg="retain" style="font-size:18px;padding:14px">自家保留</button></div></div>` : '';
   $('cowHead').className = 'card ' + (isF ? 'female' : 'male');
   $('cowHead').innerHTML = `
+    ${focusTop}
     <div class="tag" style="font-size:44px;line-height:1">${shortId(tag)} <span class="badge ${isF?'b-bad':'b-info'}" style="font-size:14px">${esc(a.sex)}</span> <span style="display:inline-block;vertical-align:middle;background:${BREED_COLOR[a.breed]||'#9ca3af'};color:${BREED_COLOR[a.breed]==='#ffffff'?'#111':'#fff'};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:14px">${esc(breedLabel(a))}</span></div>
     ${a.name ? `<div style="font-size:22px;font-weight:bold;margin-top:4px">${esc(a.name)}</div>` : ''}
     <div class="muted">識別番号 ${esc(tag)}</div>
@@ -1124,9 +1138,11 @@ function renderAlerts(){
   const bf = breedF === '哺乳中' ? '全て' : breedF;
   const list = alerts().filter(x => roleTag(x.tag) && (bf === '全て' || (db.animals[x.tag] || {}).breed === bf));
   $('alertBox').innerHTML = list.length ? list.map(x => `
-    <div class="item" data-tag="${esc(x.tag)}">
+    <div class="item" data-tag="${esc(x.tag)}" data-kind="${esc(x.kind)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
       <div><span class="badge b-${x.c}">${esc(x.text)}</span></div>
+      <div class="row" style="margin-top:6px;gap:8px;justify-content:space-between"><span class="muted" style="font-size:13px">タップで入力へ</span>
+        <button class="btn btnsmall sub" data-act="dismissAlert" data-arg="${encodeURIComponent(alertKey(x))}">このアラートを消す</button></div>
     </div>`).join('') : '<div class="muted">今、対応が必要な項目はありません</div>';
 }
 
@@ -1416,6 +1432,11 @@ const ACT = {
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
   hygAsk: k => { hygAsk = k; openTag(cur); },
+  dismissAlert: k => {
+    const m = dismissedMap(); m[decodeURIComponent(k)] = 1;
+    try{ localStorage.setItem('cattle-dismissed', JSON.stringify(m)); }catch(e){}
+    renderAlerts(); updateBadge(); toast('アラートを消しました');
+  },
   hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
     if(!cur) return;
@@ -1522,7 +1543,14 @@ document.addEventListener('click', e => {
   const jump = e.target.closest('[data-jump]');
   if(jump){ document.getElementById(jump.dataset.jump)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
   const t = e.target.closest('[data-tag]');
-  if(t){ show('input'); openTag(t.dataset.tag); }
+  if(t){
+    if('kind' in t.dataset) alertFocus = t.dataset.kind || null;
+    show('input'); openTag(t.dataset.tag);
+    if(alertFocus === 'treat' || alertFocus === 'hyg'){
+      const id = alertFocus === 'treat' ? 'actTreat' : 'actHyg';
+      setTimeout(() => document.getElementById(id)?.scrollIntoView({behavior:'smooth', block:'center'}), 60);
+    }
+  }
 });
 
 document.addEventListener('change', e => {
