@@ -49,6 +49,7 @@
   .sg.cur{background:#2a5b8c;color:#fff;font-weight:bold}
   .sg.calm{background:#6fae8c;color:#fff;font-weight:bold}
   .tbox{border:3px solid #c0392b;background:#fdecea;color:#7a1f1f;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
+  .obox{border:3px solid #d97706;background:#fff4e0;color:#7a4300;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
   .tiles{display:flex;gap:8px;margin-bottom:12px}
   .tile{flex:1;border-radius:10px;padding:8px 4px;text-align:center}
   .t-warn{background:#fbeccc;color:#7a4f00}
@@ -227,6 +228,7 @@ function build(d){
     weanM:  {'和牛':3,'ホルスタイン':2,'F1':2,'その他':2},
     shipM:  {'和牛':10,'ホルスタイン':10,'F1':10,'その他':10},
     warnDays: 14,
+    withdraw: {},
     reproM: {'和牛':13,'ホルスタイン':13,'F1':13,'その他':13},
     ...(d.settings || {})
   };
@@ -298,18 +300,47 @@ function weanBar(t){
     </div></div>`;
 }
 // 治療中：最新の診療の後に治癒が記録されていなければ治療中
-function activeSick(t){
+// 治療の状態：治療中 → 治癒の記録から7日は経過観察 → 終了（表示しない）
+function treatState(t){
   const sk = last(t,'sick'); if(!sk) return null;
-  const cu = last(t,'cured'); if(cu && byRecent(cu, sk) < 0) return null;
-  return sk;
+  const cu = last(t,'cured');
+  if(!cu || byRecent(cu, sk) >= 0) return {st:'治療中', sk, days: todayN() - dn(sk.date)};
+  const left = 7 - (todayN() - dn(cu.date));
+  if(left >= 0) return {st:'経過観察', sk, cu, left};
+  return null;
 }
+function activeSick(t){ const r = treatState(t); return r && r.st === '治療中' ? r.sk : null; }
+// 30日以内に治った病気が、また出た（再発）
+function isRecurrent(t){
+  const r = treatState(t); if(!r) return false;
+  return evType(t,'cured').some(c => c.date < r.sk.date && dn(r.sk.date) - dn(c.date) <= 30);
+}
+// 休薬期間：注射薬ごとの休薬日数（設定）から、出荷できるまでの日を出す
+function withdrawInfo(t){
+  const days = db.settings.withdraw || {};
+  let best = null;
+  for(const e of evType(t,'inj')){
+    const d = Number(days[(e.data || {}).drug]) || 0;
+    if(!d) continue;
+    const end = dn(e.date) + d;
+    if(end > todayN() && (!best || end > best.end)) best = {end, drug: e.data.drug};
+  }
+  return best;
+}
+function mdOf(n){ return new Date(n * DAY).toISOString().slice(5, 10); }
 function treatBox(t){
-  const sk = activeSick(t); if(!sk) return '';
-  const sym = (sk.data && sk.data.disease) || '症状未記録';
-  const inj = evType(t,'inj').filter(e => e.date >= sk.date).map(e => `${e.data.drug || ''}（${e.date.slice(5)}）`);
-  return `<div class="tbox"><div style="font-size:16px">🩺 治療中</div>
-    <div>症状：${esc(sym)}<span style="font-weight:normal;font-size:13px">（${esc(sk.date.slice(5))}〜）</span></div>
-    <div>処置：${inj.length ? esc(inj.join('、')) : '注射の記録なし'}</div></div>`;
+  const r = treatState(t); if(!r) return '';
+  const sym = (r.sk.data && r.sk.data.disease) || '症状未記録';
+  const inj = evType(t,'inj').filter(e => e.date >= r.sk.date).map(e => `${(e.data || {}).drug || ''}（${e.date.slice(5)}）`);
+  const wd = withdrawInfo(t);
+  const wdLine = wd ? `<div>休薬：${esc(wd.drug)}　${mdOf(wd.end)}まで出荷不可</div>` : '';
+  if(r.st === '治療中'){
+    return `<div class="tbox"><div style="font-size:16px">🩺 治療中（${r.days + 1}日目）${isRecurrent(t) ? ' <span class="badge b-bad">再発</span>' : ''}</div>
+      <div>症状：${esc(sym)}<span style="font-weight:normal;font-size:13px">（${esc(r.sk.date.slice(5))}〜）</span></div>
+      <div>処置：${inj.length ? esc(inj.join('、')) : '注射の記録なし'}</div>${wdLine}</div>`;
+  }
+  return `<div class="obox"><div style="font-size:16px">✅ 経過観察（あと${r.left}日）</div>
+    <div>症状：${esc(sym)}　治癒：${esc(r.cu.date.slice(5))}</div>${wdLine}</div>`;
 }
 function breedChipsHTML(withCalf){ return ['全て','和牛','ホルスタイン','F1','その他', ...(withCalf ? ['哺乳中'] : [])].map(b => `<button class="chip ${breedF===b?'on':''}" data-act="breedf" data-arg="${b}">${b}</button>`).join(''); }
 function setBreed(b){ breedF = b; renderList(); renderAlerts(); }
@@ -440,6 +471,15 @@ function readyLine(t){
   const rd = readyInfo(t);
   return `<div style="font-size:13px;margin-top:4px;font-weight:bold;color:${rd.ok ? '#1f5a3c' : '#7a4f00'}">種付け判定：${rd.ok ? 'OK' : '未達'}　<span style="font-weight:normal">${esc(rd.txt)}</span></div>`;
 }
+// 治療の入力ボタン（入力画面）：前回と同じ処置を記録、治癒にする
+function treatActs(t){
+  const r = treatState(t), hasInj = evType(t,'inj').length > 0;
+  if(!r && !hasInj) return '';
+  return `<div class="row" style="margin:8px 0;gap:8px">` +
+    (hasInj ? `<button class="btn" data-act="repeatTreat">前回と同じ処置を記録</button>` : '') +
+    (r && r.st === '治療中' ? `<button class="btn sub" data-act="cureNow">治癒にする（7日間は経過観察）</button>` : '') +
+    `</div>`;
+}
 // 繁殖の進み具合：0 未受胎（発情待ち）／1 授精待ち／2 鑑定待ち／3 妊娠中
 const STG = ['発情','授精','鑑定','妊娠中','分娩'];
 function stageOf(t){
@@ -480,6 +520,11 @@ function alerts(){
           else push(left, left === 0 ? '受精してください（発情の翌日）' : `受精予定を${-left}日過ぎています（発情 ${pe.date}）`, left === 0 ? 'bad' : 'warn');
         }
       }
+    }
+    const ts = treatState(tag);
+    if(ts && ts.st === '治療中'){
+      if(isRecurrent(tag)) push(-ts.days, `再発（30日以内）：治療${ts.days + 1}日目`, 'bad');
+      else if(ts.days >= 5) push(-ts.days, `治療${ts.days + 1}日目：治癒の記録を確認`, 'warn');
     }
     if(a.sex === '雌' && !hasRepro(tag) && a.birth && BREED_MIN[a.breed]){
       const age = ageM(a.birth);
@@ -676,6 +721,7 @@ function openTag(tag){
     <div class="muted">識別番号 ${esc(tag)}</div>
     <div>${st}</div>
     ${treatBox(tag)}
+    ${treatActs(tag)}
     ${isNursing(tag) ? weanBar(tag) : ''}
     <div class="muted">${esc(breedLabel(a))} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
     <div class="muted">${mother}</div>
@@ -834,6 +880,10 @@ function recordEvent(){
       }
     }
   }
+  if(selType === 'ship'){
+    const wd = withdrawInfo(cur);
+    if(wd) toast(`警告：休薬中です（${wd.drug}・${mdOf(wd.end)}まで）`);
+  }
   db.events.push({id: uid(), tag: cur, type: selType, date, data, createdAt: now});
   save();
   openTag(cur); markType(); renderForm();
@@ -902,7 +952,8 @@ function nursePhase(t){
 }
 const CHIP = {
   '全て': () => true,
-  '治療中': t => !!activeSick(t),
+  '治療中': t => (treatState(t) || {}).st === '治療中',
+  '経過観察': t => (treatState(t) || {}).st === '経過観察',
   '通常哺乳': t => isNursing(t) && nursePhase(t) === '通常哺乳',
   '減乳期間①': t => isNursing(t) && nursePhase(t) === '減乳期間①',
   '減乳期間②': t => isNursing(t) && nursePhase(t) === '減乳期間②',
@@ -914,7 +965,7 @@ const CHIP = {
   '出荷・保留未決定': t => statuses(t).some(s => s.t === '出荷・保留の判定（未決定）'),
 };
 function chipsFor(){
-  if(breedF === '哺乳中') return ['全て','治療中','通常哺乳','減乳期間①','減乳期間②'];
+  if(breedF === '哺乳中') return ['全て','治療中','経過観察','通常哺乳','減乳期間①','減乳期間②'];
   if(breedF === '育成') return ['全て','治療中','出荷・保留未決定'];
   if(breedF === '和牛') return ['全て','未受胎','鑑定待ち','妊娠中','出産直前','出産予定超過','治療中','出荷・保留未決定'];
   if(breedF === 'ホルスタイン') return ['全て','未受胎','鑑定待ち','妊娠中','出産直前','出産予定超過','治療中'];
@@ -932,6 +983,10 @@ function matchBreedF(t){
 }
 // 並べ替え：番号順／月齢が若い順／月齢が高い順（哺乳・育成のとき）
 function sortCmp(a, b){
+  if(breedF === '哺乳中'){
+    const rk = t => { const st = (treatState(t) || {}).st; return st === '治療中' ? 0 : st === '経過観察' ? 1 : 2; };
+    const d = rk(a) - rk(b); if(d) return d;
+  }
   const isCalf = breedF === '哺乳中' || breedF === '育成';
   const k = t => (db.animals[t] || {}).birth || '';
   if(isCalf && sortMode === 'young') return k(b).localeCompare(k(a)) || natSort(a, b);
@@ -1056,6 +1111,12 @@ function renderSettings(){
       ${rowsFor('reproM','発情・授精ができる月齢（ヶ月）')}
       <div style="margin-top:20px;margin-bottom:4px;font-weight:bold;font-size:17px">アラートの警告日数</div>
       <div class="row" style="margin:10px 0"><span class="lbl">警告の日数</span><input type="number" id="warnDays" value="${S.warnDays}"></div>
+      <button class="btn" data-act="saveSettings">保存</button>
+    </details>
+    <details class="card">
+      <summary style="font-weight:bold;font-size:17px;padding:4px 0">休薬日数（薬ごと・タップで開く）</summary>
+      <div class="muted" style="margin:8px 0">出荷できるまでの日数です。添付文書で確認して入れてください。0日は警告しません。</div>
+      ${db.masters.drug.length ? db.masters.drug.map(d => `<div class="row" style="margin:10px 0"><span class="lbl">${esc(d)}</span><input type="number" min="0" step="1" data-set="withdraw" data-b="${esc(d)}" value="${(db.settings.withdraw || {})[d] ?? ''}" placeholder="日"> 日</div>`).join('') : '<div class="muted">注射薬が未登録です（選択肢の管理で追加）</div>'}
       <button class="btn" data-act="saveSettings">保存</button>
     </details>
     <details class="card">
@@ -1289,6 +1350,20 @@ const ACT = {
   allList: () => { breedF = '全て'; show('list'); },
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
+  repeatTreat: () => {
+    if(!cur) return;
+    const prev = evType(cur,'inj')[0];
+    if(!prev){ toast('前回の処置がありません'); return; }
+    db.events.push({id: uid(), tag: cur, type: 'inj', date: todayS(), data: {...(prev.data || {})}, createdAt: new Date().toISOString()});
+    save(); openTag(cur);
+    toast(`前回と同じ処置（${(prev.data || {}).drug || ''}）を記録しました`);
+  },
+  cureNow: () => {
+    if(!cur) return;
+    db.events.push({id: uid(), tag: cur, type: 'cured', date: todayS(), data: {}, createdAt: new Date().toISOString()});
+    save(); openTag(cur);
+    toast('治癒にしました。7日間は経過観察になります');
+  },
   rearf: v => { rearF = v; renderList(); },
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
   openAddMaster: m => $('addm_'+m).classList.toggle('hidden'),
