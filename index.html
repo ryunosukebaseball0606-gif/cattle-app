@@ -1138,7 +1138,7 @@ function renderAlerts(){
     <div class="item" data-tag="${esc(x.tag)}" data-kind="${esc(x.kind)}">
       <b class="tag" style="font-size:30px">${shortId(x.tag)}</b> <span class="muted">${esc(x.tag)}</span>
       <div><span class="badge b-${x.c}">${esc(x.text)}</span></div>
-      <div class="muted" style="font-size:13px;margin-top:6px">タップして入力へ。実行すると、アラートは消えます。</div>
+      ${x.kind === 'decide' ? `<div class="row" style="gap:10px;margin-top:8px"><button class="btn" data-act="decideGo" data-arg="${esc(x.tag)}|ship" style="font-size:17px;padding:12px">出荷（セリ）</button><button class="btn" data-act="decideGo" data-arg="${esc(x.tag)}|retain" style="font-size:17px;padding:12px">自家保留</button></div>` : ''}
     </div>`).join('') : '<div class="muted">今、対応が必要な項目はありません</div>';
 }
 
@@ -1428,6 +1428,10 @@ const ACT = {
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
   hygAsk: k => { hygAsk = k; openTag(cur); },
+  decideGo: arg => {
+    const i = arg.lastIndexOf('|'), tag = arg.slice(0, i), kind = arg.slice(i + 1);
+    cur = null; show('input'); openTag(tag); ACT.pick(kind);
+  },
   hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
     if(!cur) return;
