@@ -48,6 +48,7 @@
   .sg.warn{background:#fbeccc;color:#7a4f00;font-weight:bold}
   .sg.cur{background:#2a5b8c;color:#fff;font-weight:bold}
   .sg.calm{background:#6fae8c;color:#fff;font-weight:bold}
+  .tbox{border:3px solid #c0392b;background:#fdecea;color:#7a1f1f;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:15px;font-weight:bold;line-height:1.6}
   .tiles{display:flex;gap:8px;margin-bottom:12px}
   .tile{flex:1;border-radius:10px;padding:8px 4px;text-align:center}
   .t-warn{background:#fbeccc;color:#7a4f00}
@@ -158,7 +159,7 @@ const LINES = ['田尻','藤良','気高'];
 const LINE_COLOR = {'田尻':'#c0392b','藤良':'#2e8b57','気高':'#2f6fb0'};
 const FEMALE_ONLY = ['estrus','ai','preg','calving'];
 const REPRO_TYPES = ['estrus','ai','preg','calving'];
-const HEALTH_TYPES = ['sick','vacc','inj'];
+const HEALTH_TYPES = ['sick','vacc','inj','cured'];
 const FATTEN_M = 30; // 自家肥育の肉用出荷月齢
 const TYPES = {
   estrus:  {label:'発情', f:[{k:'method', t:'fixed', o:['通常受精','受精卵移植'], label:'授精の方法'}]},
@@ -184,6 +185,7 @@ const TYPES = {
   ship:    {label:'出荷', f:[{k:'seri', t:'num', label:'セリ番号'}, {k:'weight', t:'num', label:'体重(kg)', onlyBreed:'和牛'}, {k:'price', t:'num', label:'価格(千円)'}]},
   retain:  {label:'自家保留', f:[]},
   dead:    {label:'死亡', f:[{k:'cause', t:'master', m:'cause', label:'死亡原因'}]},
+  cured:   {label:'治癒', f:[]},
   intro:   {label:'導入', f:[{k:'src', t:'master', m:'src', label:'導入元'}, {k:'price', t:'num', label:'買取料金(千円)'}]},
 };
 const FILTERS = ['全て','妊娠中','出産直前','出産予定超過','授精済','分娩後','空胎','繁殖待ち','哺乳中','離乳時期','離乳済','育成中','出荷適期','出荷済','死亡'];
@@ -233,28 +235,45 @@ function isNursing(t){
   const a = db.animals[t] || {}, age = ageM(a.birth);
   return age !== null && age < (db.settings.weanM[a.breed] ?? 2) && !last(t,'wean') && !isOut(t);
 }
-// 哺乳の進み具合バー：通常哺乳（0〜離乳の2週間前）→ 減乳（離乳の2週間前〜離乳）
+// 哺乳の進み具合バー：通常哺乳 → 減乳期間① → 減乳期間②（離乳の2週間前から1週間ずつ）→ 離乳
 function weanBar(t){
   const a = db.animals[t] || {};
   if(!a.birth) return '';
   const wm = db.settings.weanM[a.breed] ?? 2;
-  const bd = dn(a.birth), wd = dn(addMonths(a.birth, wm)), rd = wd - 14, T = todayN();
+  const bd = dn(a.birth), wd = dn(addMonths(a.birth, wm)), rd = wd - 14, md = wd - 7, T = todayN();
   const span = Math.max(1, wd - bd);
-  const pos = Math.max(0, Math.min(100, (T - bd) / span * 100));
-  const rp = Math.max(0, Math.min(100, (rd - bd) / span * 100));
+  const pct = d => Math.max(0, Math.min(100, (d - bd) / span * 100));
+  const pos = pct(T);
   let phase, msg;
-  if(T < rd){ phase = '通常哺乳'; msg = `減乳まであと${rd - T}日`; }
-  else if(T < wd){ phase = '減乳'; msg = `離乳まであと${wd - T}日`; }
+  if(T < rd){ phase = '通常哺乳'; msg = `減乳期間①まであと${rd - T}日`; }
+  else if(T < md){ phase = '減乳期間①'; msg = `減乳期間②まであと${md - T}日`; }
+  else if(T < wd){ phase = '減乳期間②'; msg = `離乳まであと${wd - T}日`; }
   else { phase = '離乳'; msg = '離乳日です'; }
+  const w1 = pct(rd), w2 = pct(md) - pct(rd), w3 = 100 - pct(md);
   return `<div style="margin:8px 0 4px">
     <div style="position:relative;height:22px;border-radius:11px;overflow:visible;display:flex">
-      <div style="width:${rp}%;background:#dde9f6;border-radius:11px 0 0 11px"></div>
-      <div style="flex:1;background:#fbeccc;border-radius:0 11px 11px 0"></div>
+      <div style="width:${w1}%;background:#dde9f6;border-radius:11px 0 0 11px"></div>
+      <div style="width:${w2}%;background:#fde3b0"></div>
+      <div style="width:${w3}%;background:#f5b25c;border-radius:0 11px 11px 0"></div>
       <div style="position:absolute;left:calc(${pos}% - 8px);top:3px;width:16px;height:16px;border-radius:50%;background:#111;border:2px solid #fff;box-shadow:0 0 0 1px #888"></div>
     </div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-top:3px">
       <span>0日</span><span style="font-weight:bold;color:#111">${T - bd}日齢・${phase}　${msg}</span><span>離乳${wd - bd}日</span>
     </div></div>`;
+}
+// 治療中：最新の診療の後に治癒が記録されていなければ治療中
+function activeSick(t){
+  const sk = last(t,'sick'); if(!sk) return null;
+  const cu = last(t,'cured'); if(cu && byRecent(cu, sk) < 0) return null;
+  return sk;
+}
+function treatBox(t){
+  const sk = activeSick(t); if(!sk) return '';
+  const sym = (sk.data && sk.data.disease) || '症状未記録';
+  const inj = evType(t,'inj').filter(e => e.date >= sk.date).map(e => `${e.data.drug || ''}（${e.date.slice(5)}）`);
+  return `<div class="tbox"><div style="font-size:16px">🩺 治療中</div>
+    <div>症状：${esc(sym)}<span style="font-weight:normal;font-size:13px">（${esc(sk.date.slice(5))}〜）</span></div>
+    <div>処置：${inj.length ? esc(inj.join('、')) : '注射の記録なし'}</div></div>`;
 }
 function breedChipsHTML(withCalf){ return ['全て','和牛','ホルスタイン','F1','その他', ...(withCalf ? ['哺乳中'] : [])].map(b => `<button class="chip ${breedF===b?'on':''}" data-act="breedf" data-arg="${b}">${b}</button>`).join(''); }
 function setBreed(b){ breedF = b; renderList(); renderAlerts(); }
@@ -578,6 +597,7 @@ function openTag(tag){
     ${a.name ? `<div style="font-size:22px;font-weight:bold;margin-top:4px">${esc(a.name)}</div>` : ''}
     <div class="muted">識別番号 ${esc(tag)}</div>
     <div>${st}</div>
+    ${treatBox(tag)}
     ${isNursing(tag) ? weanBar(tag) : ''}
     <div class="muted">${esc(breedLabel(a))} ／ ${esc(ageText(a.birth))}${a.birth ? '（'+esc(a.birth)+'）' : ''}</div>
     <div class="muted">${mother}</div>
@@ -819,6 +839,7 @@ function renderList(){
     })() : '';
     return `<div class="item" data-tag="${esc(t)}" style="background:${isF?'#fdf1f5':'#eef4fb'};border-left:14px solid ${bc};margin:0 -14px;padding:12px 14px">
       <div><b class="tag" style="font-size:30px">${shortId(t)}</b> ${a.name ? `<b style="font-size:18px">${esc(a.name)}</b> ` : ''}<span class="muted">${esc(t)}</span></div>
+      ${treatBox(t)}
       <div style="margin-top:4px"><span style="display:inline-block;background:${bc};color:${bt};border:1px solid #888;font-weight:bold;border-radius:6px;padding:2px 8px;font-size:13px">${esc(breedLabel(a))}</span>
       <span class="muted">${esc(a.sex)}・${esc(isNursing(t) && a.birth ? `${todayN() - dn(a.birth)}日齢` : ageText(a.birth))}${due}</span></div>
       ${pedRow}
