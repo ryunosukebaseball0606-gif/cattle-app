@@ -247,7 +247,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
-let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null;
+let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null, backToAlerts = false;
 const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure','ship','retain'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
@@ -742,7 +742,7 @@ function pedigreeHTML(tag){
 /* ---------- 表示 ---------- */
 function show(v){
   curView = v;
-  if(v !== 'input') alertFocus = null;
+  if(v !== 'input'){ alertFocus = null; backToAlerts = false; }
   ['input','alerts','list','reg','set'].forEach(x => $('v-'+x).classList.toggle('hidden', x !== v));
   document.querySelectorAll('#roleBar [data-arg]').forEach(b => b.classList.toggle('on', b.dataset.arg === role));
   document.querySelectorAll('nav [data-hide-for]').forEach(b => b.classList.toggle('hidden', b.dataset.hideFor === role));
@@ -924,6 +924,14 @@ function allowedType(tag, k){
   }
   return true;
 }
+// 記録した後：アラートから来た場合はアラートに戻る。そうでなければ牛の情報を更新
+function afterRecord(msg){
+  save();
+  if(backToAlerts){ backToAlerts = false; show('alerts'); toast(msg + '（アラートに戻りました）'); return true; }
+  openTag(cur);
+  toast(msg);
+  return false;
+}
 function renderForm(){
   const T = TYPES[selType];
   $('entryForm').innerHTML = `
@@ -976,9 +984,8 @@ function recordEvent(){
     if(wd) toast(`警告：休薬中です（${wd.drug}・${mdOf(wd.end)}まで）`);
   }
   db.events.push({id: uid(), tag: cur, type: selType, date, data, createdAt: now});
-  save();
-  openTag(cur); markType(); renderForm();
-  toast('記録しました');
+  if(afterRecord('記録しました')) return;
+  markType(); renderForm();
 }
 
 /* ---------- 登録・編集 ---------- */
@@ -1417,7 +1424,7 @@ const ACT = {
   pick: k => {
     selType = k; renderForm(); markType(); placeForm(k);
     toast(`「${TYPES[k] ? TYPES[k].label : k}」を選びました。下で入力してください`);
-    setTimeout(() => { const ef = $('entryForm'); ef.style.scrollMarginTop = '110px'; ef.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+    setTimeout(() => $('entryForm').scrollIntoView({behavior:'smooth', block:'center'}), 60);
   },
   record: () => recordEvent(),
   delEv: id => { db.events = db.events.filter(e => e.id !== id); save(); openTag(cur); toast('削除しました'); },
@@ -1452,22 +1459,19 @@ const ACT = {
     if(!cur) return;
     hygAsk = null;
     db.events.push({id: uid(), tag: cur, type: 'hyg', date: todayS(), data: {k}, createdAt: new Date().toISOString()});
-    save(); openTag(cur);
-    toast('衛生管理を記録しました');
+    afterRecord('衛生管理を記録しました');
   },
   repeatTreat: () => {
     if(!cur) return;
     const prev = evType(cur,'inj')[0];
     if(!prev){ toast('前回の処置がありません'); return; }
     db.events.push({id: uid(), tag: cur, type: 'inj', date: todayS(), data: {...(prev.data || {})}, createdAt: new Date().toISOString()});
-    save(); openTag(cur);
-    toast(`前回と同じ処置（${(prev.data || {}).drug || ''}）を記録しました`);
+    afterRecord(`前回と同じ処置（${(prev.data || {}).drug || ''}）を記録しました`);
   },
   cureNow: () => {
     if(!cur) return;
     db.events.push({id: uid(), tag: cur, type: 'cured', date: todayS(), data: {}, createdAt: new Date().toISOString()});
-    save(); openTag(cur);
-    toast('治癒にしました。7日間は経過観察になります');
+    afterRecord('治癒にしました。7日間は経過観察になります');
   },
   rearf: v => { rearF = v; renderList(); },
   importPaste: () => { const t = ($('jsonTxt').value || '').trim(); if(!t){ toast('文字を貼り付けてください'); return; } importJSONText(t); },
@@ -1556,7 +1560,7 @@ document.addEventListener('click', e => {
   if(jump){ document.getElementById(jump.dataset.jump)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
   const t = e.target.closest('[data-tag]');
   if(t){
-    show('input'); openTag(t.dataset.tag);
+    show('input'); backToAlerts = !!t.closest('#alertBox'); openTag(t.dataset.tag);
   }
 });
 
