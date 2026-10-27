@@ -616,6 +616,7 @@ function alerts(){
     if(ts && ts.st === '治療中'){
       if(isRecurrent(tag)) push(-ts.days, `再発（30日以内）：治療${ts.days + 1}日目`, 'bad');
       else if(ts.days >= 5) push(-ts.days, `治療${ts.days + 1}日目：治癒の記録を確認`, 'warn');
+      else push(-ts.days, `治療中（${ts.days + 1}日目）：${ts.sk.data && ts.sk.data.disease ? ts.sk.data.disease : '症状未記録'}`, 'info');
     }
     if(a.sex === '雌' && !hasRepro(tag) && a.birth && BREED_MIN[a.breed]){
       const age = ageM(a.birth);
