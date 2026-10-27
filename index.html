@@ -249,7 +249,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
-let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null, backToAlerts = false, showPat = false, showDesc = false;
+let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null, backToAlerts = false, showPat = false, showDesc = false, treatCont = false;
 const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure','ship_plan','hold_plan','ship','retain'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
@@ -549,10 +549,17 @@ function readyLine(t){
 function treatActs(t){
   const r = treatState(t), hasInj = evType(t,'inj').length > 0;
   if(!r && !hasInj) return '';
-  return `<div id="actTreat" class="row" style="margin:8px 0;gap:8px">` +
+  const ing = r && r.st === '治療中';
+  const drugs = db.masters.drug || [];
+  const chooser = ing && treatCont ? `<div style="width:100%;border:2px solid #888;border-radius:8px;padding:8px;margin-top:6px">
+      <div style="font-weight:bold;margin-bottom:6px">今日の処置を選ぶ（治療は続きます）</div>
+      <div class="row" style="gap:8px;flex-wrap:wrap">${drugs.length ? drugs.map(d => `<button class="btn" data-act="treatContDo" data-arg="${esc(d)}">${esc(d)}</button>`).join('') : '<span class="muted">注射薬が未登録です（選択肢の管理で追加）</span>'}</div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn sub" data-act="treatContOther">その他（入力画面で選ぶ）</button><button class="btn sub" data-act="treatContCancel">やめる</button></div>
+    </div>` : '';
+  return `<div id="actTreat" style="margin:8px 0"><div class="row" style="gap:8px;flex-wrap:wrap">` +
     (hasInj ? `<button class="btn" data-act="repeatTreat">前回と同じ処置を記録</button>` : '') +
-    (r && r.st === '治療中' ? `<button class="btn sub" data-act="cureNow">治癒にする（7日間は経過観察）</button>` : '') +
-    `</div>`;
+    (ing ? `<button class="btn" data-act="treatCont">治療を継続（処置を入力）</button><button class="btn sub" data-act="cureNow">治癒にする（7日間は経過観察）</button>` : '') +
+    `</div>${chooser}</div>`;
 }
 // 繁殖の進み具合：0 未受胎（発情待ち）／1 授精待ち／2 鑑定待ち／3 妊娠中
 const STG = ['発情','授精','鑑定','妊娠中','分娩'];
@@ -615,8 +622,12 @@ function alerts(){
     const ts = treatState(tag);
     if(ts && ts.st === '治療中'){
       if(isRecurrent(tag)) push(-ts.days, `再発（30日以内）：治療${ts.days + 1}日目`, 'bad');
-      else if(ts.days >= 5) push(-ts.days, `治療${ts.days + 1}日目：治癒の記録を確認`, 'warn');
-      else push(-ts.days, `治療中（${ts.days + 1}日目）：${ts.sk.data && ts.sk.data.disease ? ts.sk.data.disease : '症状未記録'}`, 'info');
+      else {
+        const touch = Math.max(dn(ts.sk.date), ...evType(tag,'inj').filter(e => e.date >= ts.sk.date).map(e => dn(e.date)));
+        const since = T - touch;
+        if(since >= 5) push(-ts.days, `治療${ts.days + 1}日目：治癒か継続かを確認（最後の処置から${since}日）`, 'warn');
+        else push(-ts.days, `治療中（${ts.days + 1}日目）：${ts.sk.data && ts.sk.data.disease ? ts.sk.data.disease : '症状未記録'}`, 'info');
+      }
     }
     if(a.sex === '雌' && !hasRepro(tag) && a.birth && BREED_MIN[a.breed]){
       const age = ageM(a.birth);
@@ -1498,6 +1509,15 @@ const ACT = {
   setRole: r => setRole(r),
   hygAsk: k => { hygAsk = k; openTag(cur); },
   togglePat: () => { showPat = !showPat; openTag(cur); },
+  treatCont: () => { treatCont = true; openTag(cur); },
+  treatContCancel: () => { treatCont = false; openTag(cur); },
+  treatContDo: d => {
+    if(!cur) return;
+    treatCont = false;
+    db.events.push({id: uid(), tag: cur, type: 'inj', date: todayS(), data: {drug: d}, createdAt: new Date().toISOString()});
+    afterRecord(`治療を継続：${d}を記録しました`);
+  },
+  treatContOther: () => { treatCont = false; ACT.pick('inj'); },
   toggleDesc: () => { showDesc = !showDesc; openTag(cur); },
   hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
