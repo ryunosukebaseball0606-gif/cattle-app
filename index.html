@@ -643,9 +643,12 @@ function alerts(){
       continue;
     }
     if(a.birth && !last(tag,'wean')){
-      const left = dn(addMonths(a.birth, S.weanM[a.breed] ?? 2)) - T;
-      if(left <= S.warnDays && left > -30)
-        push(left, left < 0 ? '離乳未記録（予定超過）' : `離乳まで${left}日`, left < 0 ? 'warn' : 'info');
+      // 離乳まで何日、は出さない。減乳開始日と離乳日の当日だけ知らせる
+      const wd = dn(addMonths(a.birth, S.weanM[a.breed] ?? 2)), rd = wd - 14;
+      if(T === rd) push(0, '今日から減乳（減乳期間①の開始日）', 'info');
+      if(T === wd) push(0, '今日は離乳日です', 'warn');
+      const left = wd - T;
+      if(left < 0 && left > -30) push(left, '離乳未記録（予定超過）', 'warn');
     }
     const spd = shipPending(tag);
     if(spd && spd.data && spd.data.sale_date){
