@@ -164,6 +164,7 @@ const MASTER_DEF = {
   drug:    {label:'注射薬', list:[]},
   embryo:  {label:'胚の種類', list:[]},
   cause:   {label:'死亡原因', list:[]},
+  treat:   {label:'処置', list:['点滴','注射','経口補液','飲ませ薬','保温','隔離','獣医往診','経過観察']},
   src:     {label:'導入元', list:['大和谷','中村','小嶋','小木','溝井','置戸町外']},
 };
 const LINES = ['田尻','藤良','気高'];
@@ -190,7 +191,7 @@ const TYPES = {
   move:    {label:'移動', f:[{k:'barn', t:'master', m:'barn', label:'移動先'}]},
   weight:  {label:'体重', f:[{k:'kg', t:'num', label:'体重(kg)'}]},
   wean:    {label:'離乳', f:[]},
-  sick:    {label:'診療', f:[{k:'disease', t:'multi', m:'disease', label:'病名・症状（複数選べます）'}]},
+  sick:    {label:'診療', f:[{k:'disease', t:'multi', m:'disease', label:'病名・症状（複数選べます）'}, {k:'treat', t:'multi', m:'treat', label:'処置（複数選べます）'}]},
   vacc:    {label:'ワクチン', f:[{k:'vaccine', t:'master', m:'vaccine', label:'ワクチン'}]},
   inj:     {label:'注射', f:[{k:'drug', t:'master', m:'drug', label:'注射薬'}]},
   ship_plan: {label:'出荷予定', f:[{k:'sale_date', t:'date', label:'セリ日'}]},
@@ -344,7 +345,7 @@ function treatBox(t){
   if(r.st === '治療中'){
     return `<div class="tbox"><div style="font-size:16px">🩺 治療中（${r.days + 1}日目）${isRecurrent(t) ? ' <span class="badge b-bad">再発</span>' : ''}</div>
       <div>症状：${esc(sym)}<span style="font-weight:normal;font-size:13px">（${esc(r.sk.date.slice(5))}〜）</span></div>
-      <div>処置：${inj.length ? esc(inj.join('、')) : '注射の記録なし'}</div>${wdLine}</div>`;
+      <div>処置：${esc([(r.sk.data || {}).treat, ...inj].filter(Boolean).join('、') || '記録なし')}</div>${wdLine}</div>`;
   }
   return `<div class="obox"><div style="font-size:16px">✅ 経過観察（あと${r.left}日）</div>
     <div>症状：${esc(sym)}　治癒：${esc(r.cu.date.slice(5))}</div>${wdLine}</div>`;
