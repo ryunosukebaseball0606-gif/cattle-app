@@ -249,7 +249,7 @@ function save(){ db.updatedAt = Date.now(); persistLocal(); lsSet('cattle-dirty'
 /* ---------- 共通 ---------- */
 let cur = null, editing = null, selType = null, filterSt = '全て', showOut = false, breedF = '全て';
 // 役割（子牛係・繁殖係・全体）。役割ごとに見える画面と入力項目を絞る
-let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null, backToAlerts = false;
+let role = '全体', curView = 'input', rearF = '全て', sortMode = 'natural', hygAsk = null, alertFocus = null, backToAlerts = false, showPat = false, showDesc = false;
 const ROLE_TYPES = {'子牛係':['sick','vacc','inj','cured','wean','weight','move','measure','ship_plan','hold_plan','ship','retain'], '繁殖係':['estrus','ai','preg','calving','measure']};
 const ROLE_DEFAULT = {'子牛係':'哺乳中', '繁殖係':'和牛', '全体':'全て'};
 function roleAllows(k){ return role === '全体' || !ROLE_TYPES[role] || ROLE_TYPES[role].includes(k); }
@@ -743,24 +743,38 @@ function nodeHTML(n){
 // 四代血統を樹形図で描く（左が本人、右へ父・母と遡る）。不明の先祖は「不明」と表示
 // 母系をたどるときは、母の箱をタップすると、その牛の血統図に移れる
 function pedigreeHTML(tag){
-  const box = (node, label) => {
+  const lc = LINE_COLOR[fatherLine(tag)];
+  const box = (node, label, root) => {
     if(node.kind === 'unknown') return `<div class="pbox unk"><span class="plab">${esc(label)}</span>不明</div>`;
-    if(node.kind === 'cow') return `<div class="pbox cow" data-tag="${esc(node.id)}"><span class="plab">${esc(label)}</span><b>${esc(shortId(node.id))}</b><small>${esc(node.id)}</small>${lineBadge(fatherLine(node.id))}</div>`;
-    return `<div class="pbox bull"><span class="plab">${esc(label)}</span><b>${esc(node.id)}</b>${lineBadge(lineOfBull(node.id))}</div>`;
+    const rs = root && lc ? `style="border:3px solid ${lc};background:${lc}1a"` : '';
+    if(node.kind === 'cow') return `<div class="pbox cow" ${rs} data-tag="${esc(node.id)}"><span class="plab">${esc(label)}</span><b>${esc(shortId(node.id))}</b><small>${esc(node.id)}</small>${root ? lineBadge(fatherLine(node.id)) : ''}</div>`;
+    return `<div class="pbox bull"><span class="plab">${esc(label)}</span><b>${esc(node.id)}</b>${root ? '' : lineBadge(lineOfBull(node.id))}</div>`;
   };
-  const walk = (node, g, path, label) => {
-    const self = box(node, label);
+  const walk = (node, g, path, label, root) => {
+    const self = box(node, label, root);
     if(g >= 4 || node.kind === 'unknown') return `<div class="ptree">${self}</div>`;
     const [s, d] = parentsOf(node);
     const sp = path ? path + 'の父' : '父';
     const dp = path ? path + 'の母' : '母';
+    // 父の父・父の母（父方の祖先）は、ボタンを押したときだけ出す
+    const sHtml = (!sp.startsWith('父の') || showPat) ? walk(s, g+1, sp, sp, false) : '';
+    const dHtml = (!dp.startsWith('父の') || showPat) ? walk(d, g+1, dp, dp, false) : '';
     return `<div class="ptree">${self}<div class="pkids">` +
-      `<div class="pkid">${walk(s, g+1, sp, sp)}</div>` +
-      `<div class="pkid">${walk(d, g+1, dp, dp)}</div>` +
+      (sHtml ? `<div class="pkid">${sHtml}</div>` : '') +
+      (dHtml ? `<div class="pkid">${dHtml}</div>` : '') +
       `</div></div>`;
   };
-  return `<div class="pedwrap">${walk({kind:'cow', id:tag}, 0, '', '本人')}</div>` +
+  return `<div class="pedwrap">${walk({kind:'cow', id:tag}, 0, '', '本人', true)}</div>` +
+    `<div class="row" style="gap:8px;margin:6px 0"><button class="btn sub btnsmall" data-act="togglePat">${showPat ? '父方の祖先を隠す' : '父方の祖先を見る（父の父・父の母）'}</button></div>` +
     `<div class="muted" style="font-size:12px">横にスクロールできます。母の箱をタップすると、その牛の血統図に移ります。</div>`;
+}
+// 産んだ牛を樹形図で（母→子→孫）。3世代まで
+function descHTML(tag, depth){
+  const a = db.animals[tag] || {};
+  const box = `<div class="pbox cow" data-tag="${esc(tag)}"><b>${esc(shortId(tag))}</b>${a.name ? `<small>${esc(a.name)}</small>` : ''}<small>${esc(tag)}</small><small>${esc(a.sex || '')}・${esc(ageText(a.birth))}</small>${statuses(tag).slice(0,2).map(x => `<span class="badge b-${x.c}">${esc(x.t)}</span>`).join('')}</div>`;
+  const kids = children(tag);
+  if(depth >= 2 || !kids.length) return `<div class="ptree">${box}</div>`;
+  return `<div class="ptree">${box}<div class="pkids">${kids.map(k => `<div class="pkid">${descHTML(k, depth+1)}</div>`).join('')}</div></div>`;
 }
 
 /* ---------- 表示 ---------- */
@@ -866,7 +880,9 @@ function renderLineage(tag){
     return `<div class="ev"><span>${link(k)} <span class="muted">${esc(a.sex)}・${esc(ageText(a.birth))}${wk ? '・父系統 ' + lineBadge(fatherLine(k)) : ''}${n ? '・子'+n+'頭' : ''}</span></span></div>`;
   }).join('') : '<div class="muted">子牛の記録なし</div>';
   const isW = (db.animals[tag] || {}).breed === '和牛';
-  $('lineage').innerHTML = `${isW ? '<h3>四代血統</h3>' + pedigreeHTML(tag) : ''}<h3 style="margin-top:14px">母系（上流）</h3><div class="muted">${up}</div><h3 style="margin-top:14px">子牛（下流）</h3>${kidsHtml}`;
+  const descBtn = `<div class="row" style="margin:10px 0"><button class="btn sub" data-act="toggleDesc">${showDesc ? '産んだ牛の樹形図を閉じる' : '産んだ牛を樹形図で見る'}</button></div>`;
+  const descTree = showDesc ? `<h3 style="margin-top:14px">産んだ牛（樹形図）</h3><div class="pedwrap">${descHTML(tag, 0)}</div>` : '';
+  $('lineage').innerHTML = `${isW ? '<h3>四代血統</h3>' + pedigreeHTML(tag) : ''}<h3 style="margin-top:14px">母系（上流）</h3><div class="muted">${up}</div><h3 style="margin-top:14px">子牛（下流）</h3>${descBtn}${descTree || kidsHtml}`;
 }
 function renderHistory(){
   const all = evOf(cur);
@@ -1481,6 +1497,8 @@ const ACT = {
   breedTab: b => { breedF = b; show('list'); },
   setRole: r => setRole(r),
   hygAsk: k => { hygAsk = k; openTag(cur); },
+  togglePat: () => { showPat = !showPat; openTag(cur); },
+  toggleDesc: () => { showDesc = !showDesc; openTag(cur); },
   hygCancel: () => { hygAsk = null; openTag(cur); },
   hygDone: k => {
     if(!cur) return;
